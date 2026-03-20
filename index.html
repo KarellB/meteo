@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<title>Meteostanice – 24h dashboard 2x2</title>
+<title>Meteostanice – dashboard s den/noc ikonami</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 body { font-family: Arial; background: #0f172a; color: #e2e8f0; padding: 20px; }
@@ -70,43 +70,45 @@ function getWeatherIcon(temp) {
   return '🌡️';
 }
 
-// plugin pro vykreslení ikony teploty u posledního bodu
+// plugin pro teplotní ikonu posledního bodu + den/noc ikony
 const tempIconPlugin = {
   id: 'tempIcon',
-  afterDatasetsDraw(chart) {
+  afterDatasetsDraw(chart){
     const ctx = chart.ctx;
     const dataset = chart.data.datasets[0];
-    const lastIndex = dataset.data.length -1;
+    const lastIndex = dataset.data.length-1;
     const meta = chart.getDatasetMeta(0);
     const point = meta.data[lastIndex];
     if(!point) return;
+
     const x = point.x;
     const y = point.y;
     const value = dataset.data[lastIndex];
-    const icon = value < 0 ? '❄️' : (value > 30 ? '🔥' : '🌡️');
+    const icon = value<0?'❄️':(value>30?'🔥':'🌡️');
+
     ctx.save();
-    ctx.font = '18px Arial';
-    ctx.fillText(icon, x + 6, y - 6);
+    ctx.font='18px Arial';
+    ctx.fillText(icon,x+6,y-6);
+
+    // den/noc ikony u všech ticků
+    chart.data.labels.forEach((label,i)=>{
+      const dt = new Date(label); // použijeme label jen pro pozici
+      const hour = chart.config.data.datasets[0].data[i]; // index
+      const metaPoint = meta.data[i];
+      if(!metaPoint) return;
+      const xi = metaPoint.x;
+      const yi = chart.chartArea.bottom + 15;
+      const dtHour = chart.data.datasets[0].data[i]; // zde budeme používat indexy času
+      // S jednoduchou logikou: pokud hodina mezi 6-18 -> 🌞, jinak 🌙
+      const hourVal = new Date(chart.data.labels[i]).getHours();
+      const dayIcon = (hourVal>=6 && hourVal<18)?'🌞':'🌙';
+      ctx.font='12px Arial';
+      ctx.fillText(dayIcon, xi-6, yi+10);
+    });
+
     ctx.restore();
   }
 };
-
-// den/noc overlay
-function createDayNightBackground(chart, data) {
-  const ctx = chart.ctx;
-  const chartArea = chart.chartArea;
-  if (!chartArea) return;
-  const xScale = chart.scales.x;
-  ctx.save();
-  data.forEach((d,i) => {
-    const hour = d.datetime.getHours();
-    const x = xScale.getPixelForTick(i);
-    let nextX = i < data.length-1 ? xScale.getPixelForTick(i+1) : chartArea.right;
-    ctx.fillStyle = (hour >= 6 && hour < 18) ? 'rgba(173,216,230,0.1)' : 'rgba(25,25,112,0.2)';
-    ctx.fillRect(x, chartArea.top, nextX - x, chartArea.bottom - chartArea.top);
-  });
-  ctx.restore();
-}
 
 function createOrUpdateChart(id,label,data,key,color,isTemp=false,plugin=null){
   const ctx=document.getElementById(id);
@@ -140,10 +142,9 @@ function createOrUpdateChart(id,label,data,key,color,isTemp=false,plugin=null){
       options:{
         responsive:true,
         scales:{x:{ticks:{color:'white'},grid:{color:'#374151'}},y:{ticks:{color:'white'},grid:{color:'#374151'}}},
-        plugins:{
-          legend:{labels:{color:'white'}},
-          tooltip:{callbacks:{label:function(context){const dt=data[context.dataIndex].datetime;return`${label}: ${context.formattedValue} (${dt.toLocaleDateString()} ${dt.toLocaleTimeString()})`;}}}
-        }
+        plugins:{legend:{labels:{color:'white'}},
+                 tooltip:{callbacks:{label:function(context){const dt=data[context.dataIndex].datetime;return`${label}: ${context.formattedValue} (${dt.toLocaleDateString()} ${dt.toLocaleTimeString()})`;}}}
+                }
       },
       plugins: plugin?[plugin]:[]
     });
@@ -159,6 +160,7 @@ function createOrUpdateChart(id,label,data,key,color,isTemp=false,plugin=null){
 async function updateCharts(){
   const data=await loadData();
   if(data.length===0) return;
+
   createOrUpdateChart("tempChart","Teplota (°C)",data,"temp","blue",true,tempIconPlugin);
   createOrUpdateChart("humChart","Vlhkost (%)",data,"hum","green");
   createOrUpdateChart("pressChart","Tlak (hPa)",data,"press","yellow");
