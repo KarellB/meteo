@@ -2,34 +2,23 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<title>Meteostanice LIVE z CSV – auto-refresh</title>
+<title>Meteostanice – profesionální dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-body {
-  font-family: Arial;
-  background: #0f172a;
-  color: #e2e8f0;
-  padding: 20px;
-}
+body { font-family: Arial; background: #0f172a; color: #e2e8f0; padding: 20px; }
 h1 { text-align: center; margin-bottom: 5px; }
-#lastUpdate { text-align: center; margin-bottom: 20px; color: #a1a1a1; }
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px,1fr));
-  gap: 20px;
-}
-.card {
-  background: #1e293b;
-  padding: 15px;
-  border-radius: 12px;
-}
+#lastUpdate { text-align: center; margin-bottom: 10px; color: #a1a1a1; font-size: 14px; }
+#weatherIcon { text-align: center; font-size: 36px; margin-bottom: 20px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px,1fr)); gap: 20px; }
+.card { background: #1e293b; padding: 15px; border-radius: 12px; }
 canvas { max-height: 300px; }
 </style>
 </head>
 <body>
 
-<h1>Meteostanice – poslední 3 hodiny (Auto-refresh)</h1>
+<h1>Meteostanice – poslední 3 hodiny</h1>
 <div id="lastUpdate">Načítám data...</div>
+<div id="weatherIcon">🌡️</div>
 
 <div class="grid">
   <div class="card"><h3>Teplota</h3><canvas id="tempChart"></canvas></div>
@@ -44,8 +33,7 @@ let charts = {};
 async function loadData() {
   const response = await fetch("data.csv");
   const text = await response.text();
-
-  const rows = text.split("\n").slice(1); // přeskočí hlavičku
+  const rows = text.split("\n").slice(1);
   const data = rows.map(row => {
     const cols = row.split(";");
     if (cols.length < 6) return null;
@@ -58,47 +46,59 @@ async function loadData() {
       wind: parseFloat(cols[5].replace(",", "."))
     };
   }).filter(x => x);
-
   const now = new Date();
   const threeHoursAgo = new Date(now.getTime() - 3*60*60*1000);
   return data.filter(d => d.datetime >= threeHoursAgo);
 }
 
-function createOrUpdateChart(id, label, data, key, color) {
+function getWeatherIcon(temp) {
+  if (temp < 0) return '❄️';
+  if (temp > 30) return '☀️';
+  return '🌡️';
+}
+
+function createOrUpdateChart(id, label, data, key, color, isTemp=false) {
   const ctx = document.getElementById(id);
-  const values = data.map(d => d[key]);
   const labels = data.map(d => d.datetime.toLocaleTimeString());
+  const values = data.map(d => d[key]);
 
   if (!charts[id]) {
+    let dataset = {
+      label: label,
+      data: values,
+      fill: false,
+      tension: 0.2,
+      borderColor: color,
+      backgroundColor: color,
+      pointRadius: 3,
+      pointBackgroundColor: values.map(v => (isTemp && (v<5 || v>30)) ? 'red' : color)
+    };
+
+    if (isTemp) {
+      const gradient = ctx.getContext('2d').createLinearGradient(0,0,0,300);
+      gradient.addColorStop(0, '#00f');
+      gradient.addColorStop(1, '#7ec0ff');
+      dataset.borderColor = gradient;
+    }
+
     charts[id] = new Chart(ctx, {
       type: "line",
-      data: {
-        labels: labels,
-        datasets: [{
-          label: label,
-          data: values,
-          borderColor: color,
-          backgroundColor: color,
-          fill: false,
-          tension: 0.2,
-          pointRadius: 2
-        }]
-      },
+      data: { labels: labels, datasets: [dataset] },
       options: {
         responsive: true,
         scales: {
-          x: {
-            ticks: { color: 'white' },
-            grid: { color: '#374151' }
-          },
-          y: {
-            ticks: { color: 'white' },
-            grid: { color: '#374151' }
-          }
+          x: { ticks: { color: 'white' }, grid: { color: '#374151' } },
+          y: { ticks: { color: 'white' }, grid: { color: '#374151' } }
         },
         plugins: {
-          legend: {
-            labels: { color: 'white' }
+          legend: { labels: { color: 'white' } },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const dt = data[context.dataIndex].datetime;
+                return `${label}: ${context.formattedValue} (${dt.toLocaleDateString()} ${dt.toLocaleTimeString()})`;
+              }
+            }
           }
         }
       }
@@ -106,27 +106,28 @@ function createOrUpdateChart(id, label, data, key, color) {
   } else {
     charts[id].data.labels = labels;
     charts[id].data.datasets[0].data = values;
+    charts[id].data.datasets[0].pointBackgroundColor = values.map(v => (isTemp && (v<5||v>30)) ? 'red' : color);
     charts[id].update();
   }
 }
 
 async function updateCharts() {
   const data = await loadData();
+  if(data.length === 0) return;
 
-  createOrUpdateChart("tempChart", "Teplota (°C)", data, "temp", "blue");
+  createOrUpdateChart("tempChart", "Teplota (°C)", data, "temp", "blue", true);
   createOrUpdateChart("humChart", "Vlhkost (%)", data, "hum", "green");
   createOrUpdateChart("pressChart", "Tlak (hPa)", data, "press", "yellow");
   createOrUpdateChart("windChart", "Vítr (m/s)", data, "wind", "red");
 
-  // aktualizace času poslední změny
   const now = new Date();
   document.getElementById("lastUpdate").textContent = "Poslední aktualizace: " + now.toLocaleTimeString();
+
+  const lastTemp = data[data.length-1].temp;
+  document.getElementById("weatherIcon").textContent = getWeatherIcon(lastTemp);
 }
 
-// inicializace
 updateCharts();
-
-// každých 5 minut = 300000 ms
 setInterval(updateCharts, 300000);
 </script>
 
