@@ -2,10 +2,10 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<title>Meteostanice – dashboard s den/noc ikonami</title>
+<title>Meteostanice – profesionální dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-body { font-family: Arial; background: #0f172a; color: #e2e8f0; padding: 20px; }
+body { font-family: Arial; transition: background 1s; color: #e2e8f0; padding: 20px; }
 h1 { text-align: center; margin-bottom: 5px; }
 #lastUpdate { text-align: center; margin-bottom: 10px; color: #a1a1a1; font-size: 14px; }
 #weatherIcon { text-align: center; font-size: 36px; margin-bottom: 20px; }
@@ -70,109 +70,133 @@ function getWeatherIcon(temp) {
   return '🌡️';
 }
 
-// plugin pro teplotní ikonu posledního bodu + den/noc ikony
+// plugin pro poslední bod teploty 🔥❄️🌡️
 const tempIconPlugin = {
   id: 'tempIcon',
   afterDatasetsDraw(chart){
     const ctx = chart.ctx;
     const dataset = chart.data.datasets[0];
-    const lastIndex = dataset.data.length-1;
     const meta = chart.getDatasetMeta(0);
-    const point = meta.data[lastIndex];
-    if(!point) return;
+    const lastPoint = meta.data[meta.data.length-1];
+    if(!lastPoint) return;
 
-    const x = point.x;
-    const y = point.y;
-    const value = dataset.data[lastIndex];
-    const icon = value<0?'❄️':(value>30?'🔥':'🌡️');
+    const value = dataset.data[dataset.data.length-1];
+    const icon = value < 0 ? '❄️' : (value > 30 ? '🔥' : '🌡️');
 
     ctx.save();
     ctx.font='18px Arial';
-    ctx.fillText(icon,x+6,y-6);
-
-    // den/noc ikony u všech ticků
-    chart.data.labels.forEach((label,i)=>{
-      const dt = new Date(label); // použijeme label jen pro pozici
-      const hour = chart.config.data.datasets[0].data[i]; // index
-      const metaPoint = meta.data[i];
-      if(!metaPoint) return;
-      const xi = metaPoint.x;
-      const yi = chart.chartArea.bottom + 15;
-      const dtHour = chart.data.datasets[0].data[i]; // zde budeme používat indexy času
-      // S jednoduchou logikou: pokud hodina mezi 6-18 -> 🌞, jinak 🌙
-      const hourVal = new Date(chart.data.labels[i]).getHours();
-      const dayIcon = (hourVal>=6 && hourVal<18)?'🌞':'🌙';
-      ctx.font='12px Arial';
-      ctx.fillText(dayIcon, xi-6, yi+10);
-    });
-
+    ctx.fillText(icon, lastPoint.x+6, lastPoint.y-6);
     ctx.restore();
   }
 };
 
-function createOrUpdateChart(id,label,data,key,color,isTemp=false,plugin=null){
-  const ctx=document.getElementById(id);
-  const labels=data.map(d=>d.datetime.toLocaleTimeString());
-  const values=data.map(d=>d[key]);
-  const pointBackgroundColors=values.map((v,i)=>{
+// plugin pro mini den/noc ikony pod každým bodem
+const dayNightIconsPlugin = {
+  id:'dayNightIcons',
+  afterDatasetsDraw(chart){
+    const ctx = chart.ctx;
+    const meta = chart.getDatasetMeta(0);
+    const dataset = chart.data.datasets[0];
+    if(!meta.data) return;
+    ctx.save();
+    ctx.font='12px Arial';
+    ctx.textAlign='center';
+    meta.data.forEach((point,i)=>{
+      const dt = dataset._timestamps ? new Date(dataset._timestamps[i]) : new Date(chart.data.labels[i]);
+      const hour = dt.getHours();
+      const icon = (hour>=6 && hour<18)?'🌞':'🌙';
+      const x = point.x;
+      const y = chart.chartArea.bottom + 12;
+      ctx.fillText(icon,x,y);
+    });
+    ctx.restore();
+  }
+};
+
+// funkce pro vytvoření/aktualizaci grafu
+function createOrUpdateChart(id,label,data,key,color,isTemp=false,plugins=[]){
+  const ctx = document.getElementById(id);
+  const labels = data.map(d=>d.datetime.toLocaleTimeString());
+  const values = data.map(d=>d[key]);
+  const pointBackgroundColors = values.map((v,i)=>{
     if(isTemp&&(v<5||v>30)) return 'red';
     return i===values.length-1?'white':color;
   });
-  const pointRadius=values.map((v,i)=>i===values.length-1?6:3);
+  const pointRadius = values.map((v,i)=>i===values.length-1?6:3);
 
   if(!charts[id]){
-    let dataset={
-      label:label,
-      data:values,
-      fill:false,
-      tension:0.2,
-      borderColor:isTemp?ctx.getContext('2d').createLinearGradient(0,0,0,300):color,
-      pointBackgroundColor:pointBackgroundColors,
-      pointRadius:pointRadius
+    let dataset = {
+      label,
+      data: values,
+      fill: false,
+      tension: 0.2,
+      borderColor: isTemp ? ctx.getContext('2d').createLinearGradient(0,0,0,300) : color,
+      pointBackgroundColor: pointBackgroundColors,
+      pointRadius: pointRadius
     };
     if(isTemp){
-      const gradient=ctx.getContext('2d').createLinearGradient(0,0,0,300);
-      gradient.addColorStop(0,'#00f');
-      gradient.addColorStop(1,'#7ec0ff');
-      dataset.borderColor=gradient;
+      const grad = ctx.getContext('2d').createLinearGradient(0,0,0,300);
+      grad.addColorStop(0,'#00f');
+      grad.addColorStop(1,'#7ec0ff');
+      dataset.borderColor = grad;
     }
-    charts[id]=new Chart(ctx,{
+    charts[id] = new Chart(ctx,{
       type:'line',
-      data:{labels:labels,datasets:[dataset]},
+      data:{labels,datasets:[dataset]},
       options:{
         responsive:true,
-        scales:{x:{ticks:{color:'white'},grid:{color:'#374151'}},y:{ticks:{color:'white'},grid:{color:'#374151'}}},
-        plugins:{legend:{labels:{color:'white'}},
-                 tooltip:{callbacks:{label:function(context){const dt=data[context.dataIndex].datetime;return`${label}: ${context.formattedValue} (${dt.toLocaleDateString()} ${dt.toLocaleTimeString()})`;}}}
-                }
+        scales:{
+          x:{ticks:{color:'white'},grid:{color:'#374151'}},
+          y:{ticks:{color:'white'},grid:{color:'#374151'}}
+        },
+        plugins:{
+          legend:{labels:{color:'white'}},
+          tooltip:{
+            callbacks:{
+              label: function(context){
+                const dt = data[context.dataIndex].datetime;
+                return `${label}: ${context.formattedValue} (${dt.toLocaleDateString()} ${dt.toLocaleTimeString()})`;
+              }
+            }
+          }
+        }
       },
-      plugins: plugin?[plugin]:[]
+      plugins: plugins
     });
-  } else{
-    charts[id].data.labels=labels;
-    charts[id].data.datasets[0].data=values;
-    charts[id].data.datasets[0].pointBackgroundColor=pointBackgroundColors;
-    charts[id].data.datasets[0].pointRadius=pointRadius;
+  } else {
+    charts[id].data.labels = labels;
+    charts[id].data.datasets[0].data = values;
+    charts[id].data.datasets[0].pointBackgroundColor = pointBackgroundColors;
+    charts[id].data.datasets[0].pointRadius = pointRadius;
     charts[id].update();
   }
 }
 
+// aktualizace pozadí stránky podle den/noc
+function updateBodyBackground(){
+  const hour = new Date().getHours();
+  document.body.style.background = (hour>=6 && hour<18)?'#87cefa':'#0f172a';
+}
+
+// hlavní funkce aktualizace
 async function updateCharts(){
-  const data=await loadData();
+  const data = await loadData();
   if(data.length===0) return;
 
-  createOrUpdateChart("tempChart","Teplota (°C)",data,"temp","blue",true,tempIconPlugin);
-  createOrUpdateChart("humChart","Vlhkost (%)",data,"hum","green");
-  createOrUpdateChart("pressChart","Tlak (hPa)",data,"press","yellow");
-  createOrUpdateChart("windChart","Vítr (m/s)",data,"wind","red");
+  createOrUpdateChart("tempChart","Teplota (°C)",data,"temp","blue",true,[tempIconPlugin,dayNightIconsPlugin]);
+  createOrUpdateChart("humChart","Vlhkost (%)",data,"hum","green",false,[dayNightIconsPlugin]);
+  createOrUpdateChart("pressChart","Tlak (hPa)",data,"press","yellow",false,[dayNightIconsPlugin]);
+  createOrUpdateChart("windChart","Vítr (m/s)",data,"wind","red",false,[dayNightIconsPlugin]);
 
-  const last=data[data.length-1];
-  document.getElementById("lastUpdate").textContent="Poslední aktualizace: "+new Date().toLocaleTimeString();
-  document.getElementById("weatherIcon").textContent=getWeatherIcon(last.temp);
-  document.getElementById("humVal").textContent="💧 "+last.hum+"%";
-  document.getElementById("windVal").textContent="🌬️ "+last.wind+" m/s";
-  document.getElementById("tempVal").textContent=last.temp+" °C";
-  document.getElementById("pressVal").textContent=last.press+" hPa";
+  const last = data[data.length-1];
+  document.getElementById("lastUpdate").textContent = "Poslední aktualizace: "+new Date().toLocaleTimeString();
+  document.getElementById("weatherIcon").textContent = getWeatherIcon(last.temp);
+  document.getElementById("humVal").textContent = "💧 "+last.hum+"%";
+  document.getElementById("windVal").textContent = "🌬️ "+last.wind+" m/s";
+  document.getElementById("tempVal").textContent = last.temp+" °C";
+  document.getElementById("pressVal").textContent = last.press+" hPa";
+
+  updateBodyBackground();
 }
 
 updateCharts();
