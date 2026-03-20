@@ -2,11 +2,8 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<title>Papago Meteo LIVE</title>
-
+<title>Meteostanice LIVE z CSV – auto-refresh</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
-
 <style>
 body {
   font-family: Arial;
@@ -14,109 +11,97 @@ body {
   color: #e2e8f0;
   padding: 20px;
 }
+h1 { text-align: center; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px,1fr));
+  gap: 20px;
+}
 .card {
   background: #1e293b;
   padding: 15px;
   border-radius: 12px;
 }
-canvas { max-height: 350px; }
+canvas { max-height: 300px; }
 </style>
 </head>
-
 <body>
 
-<h1>🌦️ Meteostanice Papago (LIVE)</h1>
+<h1>Meteostanice – poslední 3 hodiny (Auto-refresh)</h1>
 
-<div class="card">
-  <canvas id="chart"></canvas>
+<div class="grid">
+  <div class="card"><h3>Teplota</h3><canvas id="tempChart"></canvas></div>
+  <div class="card"><h3>Vlhkost</h3><canvas id="humChart"></canvas></div>
+  <div class="card"><h3>Tlak</h3><canvas id="pressChart"></canvas></div>
+  <div class="card"><h3>Vítr</h3><canvas id="windChart"></canvas></div>
 </div>
 
 <script>
-// 🔁 CORS proxy
-const API_URL =
-  "https://api.allorigins.win/raw?url=" +
-  encodeURIComponent("https://papago.cz/api/v1/data?wid=85f09adb7d83823a&key=cedae7d3c8ed1c74dd64541d19202583");
+let charts = {};
 
-let history = [];
-let chart;
+async function loadData() {
+  const response = await fetch("data.csv");
+  const text = await response.text();
 
-async function fetchData() {
-  try {
-    const res = await fetch(API_URL);
-    const json = await res.json();
+  const rows = text.split("\n").slice(1); // přeskočí hlavičku
+  const data = rows.map(row => {
+    const cols = row.split(";");
+    if (cols.length < 6) return null;
 
-    console.log(json);
-
-    const data = {
-      time: new Date(),
-      temp: json.temp || json.temperature,
-      hum: json.humidity,
-      press: json.pressure,
-      wind: json.wind
+    const datetime = new Date(cols[0].split(".").reverse().join("-") + "T" + cols[1]);
+    return {
+      datetime,
+      temp: parseFloat(cols[2].replace(",", ".")),
+      hum: parseFloat(cols[3].replace(",", ".")),
+      press: parseFloat(cols[4].replace(",", ".")),
+      wind: parseFloat(cols[5].replace(",", "."))
     };
+  }).filter(x => x);
 
-    history.push(data);
+  const now = new Date();
+  const threeHoursAgo = new Date(now.getTime() - 3*60*60*1000);
+  return data.filter(d => d.datetime >= threeHoursAgo);
+}
 
-    const cutoff = new Date(Date.now() - 3*60*60*1000);
-    history = history.filter(d => d.time >= cutoff);
+function createOrUpdateChart(id, label, data, key) {
+  const ctx = document.getElementById(id);
+  const values = data.map(d => d[key]);
+  const labels = data.map(d => d.datetime.toLocaleTimeString());
 
-  } catch (e) {
-    console.error(e);
+  if (!charts[id]) {
+    charts[id] = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: label,
+          data: values,
+          fill: false,
+          tension: 0.2
+        }]
+      },
+      options: { responsive: true }
+    });
+  } else {
+    charts[id].data.labels = labels;
+    charts[id].data.datasets[0].data = values;
+    charts[id].update();
   }
 }
 
-function initChart() {
-  chart = new Chart(document.getElementById("chart"), {
-    type: "line",
-    data: {
-      labels: [],
-      datasets: [
-        { label: "Teplota °C", data: [], yAxisID: 'y1' },
-        { label: "Vlhkost %", data: [], yAxisID: 'y2' },
-        { label: "Tlak hPa", data: [], yAxisID: 'y3' },
-        { label: "Vítr m/s", data: [], yAxisID: 'y4' }
-      ]
-    },
-    options: {
-      responsive: true,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        zoom: {
-          zoom: { wheel: { enabled: true }, mode: 'x' },
-          pan: { enabled: true, mode: 'x' }
-        }
-      },
-      scales: {
-        y1: { position: 'left' },
-        y2: { position: 'right' },
-        y3: { position: 'right' },
-        y4: { position: 'right' }
-      }
-    }
-  });
+async function updateCharts() {
+  const data = await loadData();
+  createOrUpdateChart("tempChart", "Teplota (°C)", data, "temp");
+  createOrUpdateChart("humChart", "Vlhkost (%)", data, "hum");
+  createOrUpdateChart("pressChart", "Tlak (hPa)", data, "press");
+  createOrUpdateChart("windChart", "Vítr (m/s)", data, "wind");
 }
 
-function updateChart() {
-  chart.data.labels = history.map(d => d.time.toLocaleTimeString());
+// inicializace
+updateCharts();
 
-  chart.data.datasets[0].data = history.map(d => d.temp);
-  chart.data.datasets[1].data = history.map(d => d.hum);
-  chart.data.datasets[2].data = history.map(d => d.press);
-  chart.data.datasets[3].data = history.map(d => d.wind);
-
-  chart.update();
-}
-
-async function loop() {
-  await fetchData();
-  updateChart();
-}
-
-initChart();
-
-// 🔁 každých 30 s
-setInterval(loop, 30000);
-loop();
+// 🔁 každých 5 minut = 300000 ms
+setInterval(updateCharts, 300000);
 </script>
 
 </body>
