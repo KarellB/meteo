@@ -83,7 +83,7 @@
   </style>
 </head>
 <body>
-  <h1>Meteostanice Jilemnice – posledních 24 hodin</h1>
+  <h1>Meteostanice Papago Jilemnice – posledních 24 hodin</h1>
   <div id="lastUpdate">Načítám data...</div>
   <div id="weatherIcon">🌡️</div>
 
@@ -195,15 +195,18 @@
         ctx.font = "12px Arial";
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
+        ctx.fillStyle = "#cbd5e1";
 
         meta.data.forEach((point, i) => {
           const dt = new Date(timestamps[i]);
           if (isNaN(dt.getTime())) return;
 
+          if (dt.getHours() % 4 !== 0) return;
+
           const hour = dt.getHours();
           const icon = (hour >= 6 && hour < 18) ? "🌞" : "🌙";
           const x = point.x;
-          const y = chart.chartArea.bottom + 18;
+          const y = chart.chartArea.bottom + 28;
 
           ctx.fillText(icon, x, y);
         });
@@ -262,7 +265,7 @@
             maintainAspectRatio: false,
             layout: {
               padding: {
-                bottom: 28
+                bottom: 36
               }
             },
             scales: {
