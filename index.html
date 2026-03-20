@@ -1,207 +1,366 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-<meta charset="UTF-8">
-<title>Meteostanice – profesionální dashboard</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
-body { font-family: Arial; transition: background 1s; color: #e2e8f0; padding: 20px; }
-h1 { text-align: center; margin-bottom: 5px; }
-#lastUpdate { text-align: center; margin-bottom: 10px; color: #a1a1a1; font-size: 14px; }
-#weatherIcon { text-align: center; font-size: 36px; margin-bottom: 20px; }
-.grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-.card { background: #1e293b; padding: 15px; border-radius: 12px; position: relative; }
-canvas { width: 100%; height: 300px; }
-.icon-overlay { position: absolute; top: 10px; right: 15px; font-size: 18px; color: #fff; }
-.icon-overlay span { margin-left: 5px; font-weight: bold; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meteostanice – profesionální dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      transition: background 1s;
+      color: #e2e8f0;
+      padding: 20px;
+      margin: 0;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 5px;
+    }
+
+    #lastUpdate {
+      text-align: center;
+      margin-bottom: 10px;
+      color: #a1a1a1;
+      font-size: 14px;
+    }
+
+    #weatherIcon {
+      text-align: center;
+      font-size: 36px;
+      margin-bottom: 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    .card {
+      background: #1e293b;
+      padding: 15px;
+      border-radius: 12px;
+      position: relative;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    }
+
+    .card h3 {
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+
+    canvas {
+      width: 100%;
+      height: 300px;
+    }
+
+    .icon-overlay {
+      position: absolute;
+      top: 12px;
+      right: 15px;
+      font-size: 18px;
+      color: #fff;
+      font-weight: bold;
+    }
+
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
 
-<h1>Meteostanice Papago Jilemnice – posledních 24 hodin</h1>
-<div id="lastUpdate">Načítám data...</div>
-<div id="weatherIcon">🌡️</div>
+  <h1>Meteostanice Papago – posledních 24 hodin</h1>
+  <div id="lastUpdate">Načítám data...</div>
+  <div id="weatherIcon">🌡️</div>
 
-<div class="grid">
-  <div class="card">
-    <h3>Teplota <span class="icon-overlay" id="tempVal">-- °C</span></h3>
-    <canvas id="tempChart"></canvas>
+  <div class="grid">
+    <div class="card">
+      <h3>Teplota</h3>
+      <div class="icon-overlay" id="tempVal">-- °C</div>
+      <canvas id="tempChart"></canvas>
+    </div>
+
+    <div class="card">
+      <h3>Vlhkost</h3>
+      <div class="icon-overlay" id="humVal">💧 --%</div>
+      <canvas id="humChart"></canvas>
+    </div>
+
+    <div class="card">
+      <h3>Tlak</h3>
+      <div class="icon-overlay" id="pressVal">-- hPa</div>
+      <canvas id="pressChart"></canvas>
+    </div>
+
+    <div class="card">
+      <h3>Vítr</h3>
+      <div class="icon-overlay" id="windVal">🌬️ -- m/s</div>
+      <canvas id="windChart"></canvas>
+    </div>
   </div>
-  <div class="card">
-    <h3>Vlhkost <span class="icon-overlay" id="humVal">💧 --%</span></h3>
-    <canvas id="humChart"></canvas>
-  </div>
-  <div class="card">
-    <h3>Tlak <span class="icon-overlay" id="pressVal">-- hPa</span></h3>
-    <canvas id="pressChart"></canvas>
-  </div>
-  <div class="card">
-    <h3>Vítr <span class="icon-overlay" id="windVal">🌬️ -- m/s</span></h3>
-    <canvas id="windChart"></canvas>
-  </div>
-</div>
 
-<script>
-let charts = {};
+  <script>
+    let charts = {};
 
-async function loadData() {
-  const response = await fetch("data.csv");
-  const text = await response.text();
-  const rows = text.split("\n").slice(1);
-  const data = rows.map(row => {
-    const cols = row.split(";");
-    if (cols.length < 6) return null;
-    const datetime = new Date(cols[0].split(".").reverse().join("-") + "T" + cols[1]);
-    return {
-      datetime,
-      temp: parseFloat(cols[2].replace(",", ".")),
-      hum: parseFloat(cols[3].replace(",", ".")),
-      press: parseFloat(cols[4].replace(",", ".")),
-      wind: parseFloat(cols[5].replace(",", "."))
-    };
-  }).filter(x => x);
-  const twentyFourHoursAgo = new Date(new Date().getTime() - 24*60*60*1000);
-  return data.filter(d => d.datetime >= twentyFourHoursAgo);
-}
+    async function loadData() {
+      const response = await fetch("data.csv");
+      const text = await response.text();
 
-function getWeatherIcon(temp) {
-  if (temp < 0) return '❄️';
-  if (temp > 30) return '☀️';
-  return '🌡️';
-}
+      const rows = text.split("\n").slice(1);
 
-// plugin pro poslední bod teploty 🔥❄️🌡️
-const tempIconPlugin = {
-  id: 'tempIcon',
-  afterDatasetsDraw(chart){
-    const ctx = chart.ctx;
-    const dataset = chart.data.datasets[0];
-    const meta = chart.getDatasetMeta(0);
-    const lastPoint = meta.data[meta.data.length-1];
-    if(!lastPoint) return;
+      const data = rows.map(row => {
+        const cols = row.trim().split(";");
+        if (cols.length < 6) return null;
 
-    const value = dataset.data[dataset.data.length-1];
-    const icon = value < 0 ? '❄️' : (value > 30 ? '🔥' : '🌡️');
+        const datetime = new Date(cols[0].split(".").reverse().join("-") + "T" + cols[1]);
 
-    ctx.save();
-    ctx.font='18px Arial';
-    ctx.fillText(icon, lastPoint.x+6, lastPoint.y-6);
-    ctx.restore();
-  }
-};
+        return {
+          datetime,
+          temp: parseFloat(cols[2].replace(",", ".")),
+          hum: parseFloat(cols[3].replace(",", ".")),
+          press: parseFloat(cols[4].replace(",", ".")),
+          wind: parseFloat(cols[5].replace(",", "."))
+        };
+      }).filter(x => x && !isNaN(x.datetime));
 
-// plugin pro mini den/noc ikony pod každým bodem
-const dayNightIconsPlugin = {
-  id:'dayNightIcons',
-  afterDatasetsDraw(chart){
-    const ctx = chart.ctx;
-    const meta = chart.getDatasetMeta(0);
-    const dataset = chart.data.datasets[0];
-    if(!meta.data) return;
-    ctx.save();
-    ctx.font='12px Arial';
-    ctx.textAlign='center';
-    meta.data.forEach((point,i)=>{
-      const dt = dataset._timestamps ? new Date(dataset._timestamps[i]) : new Date(chart.data.labels[i]);
-      const hour = dt.getHours();
-      const icon = (hour>=6 && hour<18)?'🌞':'🌙';
-      const x = point.x;
-      const y = chart.chartArea.bottom + 12;
-      ctx.fillText(icon,x,y);
-    });
-    ctx.restore();
-  }
-};
-
-// funkce pro vytvoření/aktualizaci grafu
-function createOrUpdateChart(id,label,data,key,color,isTemp=false,plugins=[]){
-  const ctx = document.getElementById(id);
-  const labels = data.map(d=>d.datetime.toLocaleTimeString());
-  const values = data.map(d=>d[key]);
-  const pointBackgroundColors = values.map((v,i)=>{
-    if(isTemp&&(v<5||v>30)) return 'red';
-    return i===values.length-1?'white':color;
-  });
-  const pointRadius = values.map((v,i)=>i===values.length-1?6:3);
-
-  if(!charts[id]){
-    let dataset = {
-      label,
-      data: values,
-      fill: false,
-      tension: 0.2,
-      borderColor: isTemp ? ctx.getContext('2d').createLinearGradient(0,0,0,300) : color,
-      pointBackgroundColor: pointBackgroundColors,
-      pointRadius: pointRadius
-    };
-    if(isTemp){
-      const grad = ctx.getContext('2d').createLinearGradient(0,0,0,300);
-      grad.addColorStop(0,'#00f');
-      grad.addColorStop(1,'#7ec0ff');
-      dataset.borderColor = grad;
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      return data.filter(d => d.datetime >= twentyFourHoursAgo);
     }
-    charts[id] = new Chart(ctx,{
-      type:'line',
-      data:{labels,datasets:[dataset]},
-      options:{
-        responsive:true,
-        scales:{
-          x:{ticks:{color:'white'},grid:{color:'#374151'}},
-          y:{ticks:{color:'white'},grid:{color:'#374151'}}
-        },
-        plugins:{
-          legend:{labels:{color:'white'}},
-          tooltip:{
-            callbacks:{
-              label: function(context){
-                const dt = data[context.dataIndex].datetime;
-                return `${label}: ${context.formattedValue} (${dt.toLocaleDateString()} ${dt.toLocaleTimeString()})`;
+
+    function getWeatherIcon(temp) {
+      if (temp < 0) return "❄️";
+      if (temp > 30) return "☀️";
+      return "🌡️";
+    }
+
+    function updateBodyBackground() {
+      const hour = new Date().getHours();
+      document.body.style.background = (hour >= 6 && hour < 18) ? "#87cefa" : "#0f172a";
+    }
+
+    const tempIconPlugin = {
+      id: "tempIcon",
+      afterDatasetsDraw(chart) {
+        const ctx = chart.ctx;
+        const dataset = chart.data.datasets[0];
+        const meta = chart.getDatasetMeta(0);
+        const lastPoint = meta.data[meta.data.length - 1];
+
+        if (!lastPoint) return;
+
+        const value = dataset.data[dataset.data.length - 1];
+        const icon = value < 0 ? "❄️" : (value > 30 ? "🔥" : "🌡️");
+
+        ctx.save();
+        ctx.font = "18px Arial";
+        ctx.fillText(icon, lastPoint.x + 6, lastPoint.y - 6);
+        ctx.restore();
+      }
+    };
+
+    const dayNightIconsPlugin = {
+      id: "dayNightIcons",
+      afterDraw(chart, args, pluginOptions) {
+        const ctx = chart.ctx;
+        const meta = chart.getDatasetMeta(0);
+        const timestamps = pluginOptions?.timestamps || [];
+
+        if (!meta?.data?.length || !timestamps.length) return;
+
+        ctx.save();
+        ctx.font = "12px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+
+        meta.data.forEach((point, i) => {
+          const dt = new Date(timestamps[i]);
+          if (isNaN(dt)) return;
+
+          const hour = dt.getHours();
+          const icon = (hour >= 6 && hour < 18) ? "🌞" : "🌙";
+
+          const x = point.x;
+          const y = chart.chartArea.bottom + 18;
+
+          ctx.fillText(icon, x, y);
+        });
+
+        ctx.restore();
+      }
+    };
+
+    function createOrUpdateChart(id, label, data, key, color, isTemp = false, plugins = []) {
+      const ctx = document.getElementById(id);
+      const labels = data.map(d => d.datetime.toLocaleTimeString());
+      const values = data.map(d => d[key]);
+      const timestamps = data.map(d => d.datetime.toISOString());
+
+      const pointBackgroundColors = values.map((v, i) => {
+        if (isTemp && (v < 5 || v > 30)) return "red";
+        return i === values.length - 1 ? "white" : color;
+      });
+
+      const pointRadius = values.map((v, i) => i === values.length - 1 ? 6 : 3);
+
+      if (!charts[id]) {
+        let dataset = {
+          label,
+          data: values,
+          fill: false,
+          tension: 0.25,
+          borderColor: color,
+          pointBackgroundColor: pointBackgroundColors,
+          pointBorderColor: pointBackgroundColors,
+          pointRadius: pointRadius,
+          pointHoverRadius: pointRadius.map(r => r + 1),
+          borderWidth: 2
+        };
+
+        if (isTemp) {
+          const grad = ctx.getContext("2d").createLinearGradient(0, 0, 0, 300);
+          grad.addColorStop(0, "#00f");
+          grad.addColorStop(1, "#7ec0ff");
+          dataset.borderColor = grad;
+        }
+
+        charts[id] = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels,
+            datasets: [dataset]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+              padding: {
+                bottom: 26
+              }
+            },
+            scales: {
+              x: {
+                ticks: {
+                  color: "white",
+                  maxRotation: 0,
+                  autoSkip: true,
+                  maxTicksLimit: 8
+                },
+                grid: {
+                  color: "#374151"
+                }
+              },
+              y: {
+                ticks: {
+                  color: "white"
+                },
+                grid: {
+                  color: "#374151"
+                }
+              }
+            },
+            plugins: {
+              legend: {
+                labels: {
+                  color: "white"
+                }
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const dt = data[context.dataIndex].datetime;
+                    return `${label}: ${context.formattedValue} (${dt.toLocaleDateString()} ${dt.toLocaleTimeString()})`;
+                  }
+                }
+              },
+              dayNightIcons: {
+                timestamps: timestamps
               }
             }
-          }
-        }
-      },
-      plugins: plugins
-    });
-  } else {
-    charts[id].data.labels = labels;
-    charts[id].data.datasets[0].data = values;
-    charts[id].data.datasets[0].pointBackgroundColor = pointBackgroundColors;
-    charts[id].data.datasets[0].pointRadius = pointRadius;
-    charts[id].update();
-  }
-}
+          },
+          plugins: plugins
+        });
+      } else {
+        charts[id].data.labels = labels;
+        charts[id].data.datasets[0].data = values;
+        charts[id].data.datasets[0].pointBackgroundColor = pointBackgroundColors;
+        charts[id].data.datasets[0].pointBorderColor = pointBackgroundColors;
+        charts[id].data.datasets[0].pointRadius = pointRadius;
+        charts[id].data.datasets[0].pointHoverRadius = pointRadius.map(r => r + 1);
+        charts[id].options.plugins.dayNightIcons = {
+          timestamps: timestamps
+        };
+        charts[id].update();
+      }
+    }
 
-// aktualizace pozadí stránky podle den/noc
-function updateBodyBackground(){
-  const hour = new Date().getHours();
-  document.body.style.background = (hour>=6 && hour<18)?'#87cefa':'#0f172a';
-}
+    async function updateCharts() {
+      const data = await loadData();
+      if (data.length === 0) {
+        document.getElementById("lastUpdate").textContent = "Nebyla nalezena žádná data za posledních 24 hodin";
+        return;
+      }
 
-// hlavní funkce aktualizace
-async function updateCharts(){
-  const data = await loadData();
-  if(data.length===0) return;
+      createOrUpdateChart(
+        "tempChart",
+        "Teplota (°C)",
+        data,
+        "temp",
+        "blue",
+        true,
+        [tempIconPlugin, dayNightIconsPlugin]
+      );
 
-  createOrUpdateChart("tempChart","Teplota (°C)",data,"temp","blue",true,[tempIconPlugin,dayNightIconsPlugin]);
-  createOrUpdateChart("humChart","Vlhkost (%)",data,"hum","green",false,[dayNightIconsPlugin]);
-  createOrUpdateChart("pressChart","Tlak (hPa)",data,"press","yellow",false,[dayNightIconsPlugin]);
-  createOrUpdateChart("windChart","Vítr (m/s)",data,"wind","red",false,[dayNightIconsPlugin]);
+      createOrUpdateChart(
+        "humChart",
+        "Vlhkost (%)",
+        data,
+        "hum",
+        "green",
+        false,
+        [dayNightIconsPlugin]
+      );
 
-  const last = data[data.length-1];
-  document.getElementById("lastUpdate").textContent = "Poslední aktualizace: "+new Date().toLocaleTimeString();
-  document.getElementById("weatherIcon").textContent = getWeatherIcon(last.temp);
-  document.getElementById("humVal").textContent = "💧 "+last.hum+"%";
-  document.getElementById("windVal").textContent = "🌬️ "+last.wind+" m/s";
-  document.getElementById("tempVal").textContent = last.temp+" °C";
-  document.getElementById("pressVal").textContent = last.press+" hPa";
+      createOrUpdateChart(
+        "pressChart",
+        "Tlak (hPa)",
+        data,
+        "press",
+        "yellow",
+        false,
+        [dayNightIconsPlugin]
+      );
 
-  updateBodyBackground();
-}
+      createOrUpdateChart(
+        "windChart",
+        "Vítr (m/s)",
+        data,
+        "wind",
+        "red",
+        false,
+        [dayNightIconsPlugin]
+      );
 
-updateCharts();
-setInterval(updateCharts,300000);
-</script>
+      const last = data[data.length - 1];
 
+      document.getElementById("lastUpdate").textContent =
+        "Poslední aktualizace: " + new Date().toLocaleTimeString();
+
+      document.getElementById("weatherIcon").textContent = getWeatherIcon(last.temp);
+      document.getElementById("tempVal").textContent = last.temp + " °C";
+      document.getElementById("humVal").textContent = "💧 " + last.hum + "%";
+      document.getElementById("pressVal").textContent = last.press + " hPa";
+      document.getElementById("windVal").textContent = "🌬️ " + last.wind + " m/s";
+
+      updateBodyBackground();
+    }
+
+    updateCharts();
+    setInterval(updateCharts, 300000);
+  </script>
 </body>
 </html>
