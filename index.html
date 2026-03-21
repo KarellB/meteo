@@ -178,6 +178,20 @@
       renderCharts();
     }
 
+    function updateTitle() {
+      const title = document.getElementById("pageTitle");
+
+      if (currentRange === "24h") {
+        title.textContent = "Meteostanice Papago Jilemnice – posledních 24 hodin";
+      } else if (currentRange === "week") {
+        title.textContent = "Meteostanice Papago Jilemnice – posledních 7 dní";
+      } else if (currentRange === "month") {
+        title.textContent = "Meteostanice Papago Jilemnice – posledních 30 dní";
+      } else if (currentRange === "year") {
+        title.textContent = "Meteostanice Papago Jilemnice – poslední rok";
+      }
+    }
+
     async function loadHistory() {
       const response = await fetch("history.csv?v=" + Date.now());
       const text = await response.text();
@@ -518,6 +532,8 @@
 
     function renderCharts() {
       const data = getFilteredData();
+      updateTitle();
+
       if (!data.length) {
         document.getElementById("lastUpdate").textContent = "Nebyla nalezena žádná historická data";
         return;
