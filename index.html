@@ -404,7 +404,7 @@
         return i === values.length - 1 ? "white" : color;
       });
 
-      const pointRadius = values.map((v, i) => i === values.length - 1 ? 6 : 3);
+      const pointRadius = values.map((v, i) => i === values.length - 1 ? 6 : 4);
 
       let borderColor = color;
       if (isTemp) {
@@ -419,7 +419,7 @@
           label,
           data: values,
           fill: false,
-          tension: 0.25,
+          tension: 0,
           borderColor,
           pointBackgroundColor: pointBackgroundColors,
           pointBorderColor: pointBackgroundColors,
