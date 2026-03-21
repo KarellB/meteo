@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Meteostanice – profesionální dashboard</title>
+  <title>Meteostanice Papago Jilemnice</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
   <style>
@@ -26,8 +26,9 @@
     #lastUpdate {
       text-align: center;
       margin-bottom: 10px;
-      color: #cbd5e1;
       font-size: 14px;
+      color: #e2e8f0;
+      transition: color 1s;
     }
 
     #weatherIcon {
@@ -120,6 +121,7 @@
     <button id="btn24h" class="active" onclick="setRange('24h')">24 hodin</button>
     <button id="btnWeek" onclick="setRange('week')">Týden</button>
     <button id="btnMonth" onclick="setRange('month')">Měsíc</button>
+    <button id="btnYear" onclick="setRange('year')">Rok</button>
     <button onclick="resetAllZoom()">Reset zoom</button>
     <button onclick="exportAllCharts()">Export grafů</button>
   </div>
@@ -167,6 +169,7 @@
       document.getElementById("btn24h").classList.toggle("active", range === "24h");
       document.getElementById("btnWeek").classList.toggle("active", range === "week");
       document.getElementById("btnMonth").classList.toggle("active", range === "month");
+      document.getElementById("btnYear").classList.toggle("active", range === "year");
     }
 
     function setRange(range) {
@@ -285,9 +288,11 @@
     function updateBodyBackground() {
       const hour = new Date().getHours();
       const isDay = hour >= 6 && hour < 18;
+      const titleColor = isDay ? "#0b3b8c" : "#e2e8f0";
 
       document.body.style.background = isDay ? "#87cefa" : "#0f172a";
-      document.getElementById("pageTitle").style.color = isDay ? "#0b3b8c" : "#e2e8f0";
+      document.getElementById("pageTitle").style.color = titleColor;
+      document.getElementById("lastUpdate").style.color = titleColor;
     }
 
     const tempIconPlugin = {
@@ -341,6 +346,7 @@
     function getXAxisTickLimit() {
       if (currentRange === "24h") return 8;
       if (currentRange === "week") return 10;
+      if (currentRange === "month") return 12;
       return 12;
     }
 
@@ -360,9 +366,16 @@
         }));
       }
 
+      if (currentRange === "month") {
+        return data.map(d => d.datetime.toLocaleString("cs-CZ", {
+          day: "2-digit",
+          month: "2-digit"
+        }));
+      }
+
       return data.map(d => d.datetime.toLocaleString("cs-CZ", {
-        day: "2-digit",
-        month: "2-digit"
+        month: "2-digit",
+        year: "2-digit"
       }));
     }
 
@@ -496,14 +509,11 @@
         return aggregateData(filterDays(historyData, 7), 1);
       }
 
-      return aggregateData(filterDays(historyData, 30), 6);
-    }
+      if (currentRange === "month") {
+        return aggregateData(filterDays(historyData, 30), 6);
+      }
 
-    function updateTitle() {
-      const title = document.getElementById("pageTitle");
-      if (currentRange === "24h") title.textContent = "Meteostanice – posledních 24 hodin";
-      if (currentRange === "week") title.textContent = "Meteostanice – posledních 7 dní";
-      if (currentRange === "month") title.textContent = "Meteostanice – posledních 30 dní";
+      return aggregateData(filterDays(historyData, 365), 24);
     }
 
     function renderCharts() {
@@ -512,8 +522,6 @@
         document.getElementById("lastUpdate").textContent = "Nebyla nalezena žádná historická data";
         return;
       }
-
-      updateTitle();
 
       createOrUpdateChart(
         "tempChart",
