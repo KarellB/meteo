@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Meteostanice – profesionální dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
-      transition: background 1s;
+      transition: background 1s, color 1s;
       color: #e2e8f0;
       padding: 20px;
       margin: 0;
@@ -18,6 +19,8 @@
     h1 {
       text-align: center;
       margin-bottom: 5px;
+      color: #e2e8f0;
+      transition: color 1s;
     }
 
     #lastUpdate {
@@ -30,7 +33,33 @@
     #weatherIcon {
       text-align: center;
       font-size: 36px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
+    }
+
+    .toolbar {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    .toolbar button {
+      background: #334155;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .toolbar button.active {
+      background: #0ea5e9;
+    }
+
+    .toolbar button:hover {
+      opacity: 0.92;
     }
 
     .grid {
@@ -50,12 +79,12 @@
     .card h3 {
       margin-top: 0;
       margin-bottom: 10px;
-      padding-right: 120px;
+      padding-right: 150px;
     }
 
     .chart-wrap {
       position: relative;
-      height: 300px;
+      height: 320px;
       width: 100%;
     }
 
@@ -83,9 +112,17 @@
   </style>
 </head>
 <body>
-  <h1>Meteostanice Papago Jilemnice – posledních 24 hodin</h1>
+  <h1 id="pageTitle">Meteostanice Papago Jilemnice – posledních 24 hodin</h1>
   <div id="lastUpdate">Načítám data...</div>
   <div id="weatherIcon">🌡️</div>
+
+  <div class="toolbar">
+    <button id="btn24h" class="active" onclick="setRange('24h')">24 hodin</button>
+    <button id="btnWeek" onclick="setRange('week')">Týden</button>
+    <button id="btnMonth" onclick="setRange('month')">Měsíc</button>
+    <button onclick="resetAllZoom()">Reset zoom</button>
+    <button onclick="exportAllCharts()">Export grafů</button>
+  </div>
 
   <div class="grid">
     <div class="card">
@@ -123,15 +160,30 @@
 
   <script>
     let charts = {};
+    let currentRange = "24h";
+    let historyData = [];
 
-    async function loadData() {
-      const response = await fetch("data.csv?v=" + Date.now());
+    function setActiveButton(range) {
+      document.getElementById("btn24h").classList.toggle("active", range === "24h");
+      document.getElementById("btnWeek").classList.toggle("active", range === "week");
+      document.getElementById("btnMonth").classList.toggle("active", range === "month");
+    }
+
+    function setRange(range) {
+      currentRange = range;
+      setActiveButton(range);
+      renderCharts();
+    }
+
+    async function loadHistory() {
+      const response = await fetch("history.csv?v=" + Date.now());
       const text = await response.text();
 
-      const rows = text.split(/\r?\n/).slice(1);
+      const rows = text.split(/\r?\n/);
 
       const data = rows.map(row => {
         if (!row.trim()) return null;
+        if (row.includes("Datum")) return null;
 
         const cols = row.split(";").map(c => c.trim().replace(/^"|"$/g, ""));
         if (cols.length < 6) return null;
@@ -144,13 +196,14 @@
         let year = parseInt(dateParts[2], 10);
         year = year < 100 ? 2000 + year : year;
 
-        const day = parseInt(dateParts[0], 10);
-        const month = parseInt(dateParts[1], 10) - 1;
-        const hour = parseInt(timeParts[0], 10) || 0;
-        const minute = parseInt(timeParts[1], 10) || 0;
-        const second = parseInt(timeParts[2], 10) || 0;
-
-        const datetime = new Date(year, month, day, hour, minute, second);
+        const datetime = new Date(
+          year,
+          parseInt(dateParts[1], 10) - 1,
+          parseInt(dateParts[0], 10),
+          parseInt(timeParts[0], 10) || 0,
+          parseInt(timeParts[1], 10) || 0,
+          parseInt(timeParts[2], 10) || 0
+        );
 
         const temp = parseFloat(cols[2].replace(",", ".").replace("°C", "").trim());
         const hum = parseFloat(cols[3].replace(",", ".").replace("%", "").trim());
@@ -163,15 +216,64 @@
           isNaN(hum) ||
           isNaN(press) ||
           isNaN(wind)
-        ) {
-          return null;
-        }
+        ) return null;
 
         return { datetime, temp, hum, press, wind };
       }).filter(Boolean);
 
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      return data.filter(d => d.datetime >= twentyFourHoursAgo);
+      data.sort((a, b) => a.datetime - b.datetime);
+      return data;
+    }
+
+    function filterHours(data, hours) {
+      const limit = new Date(Date.now() - hours * 60 * 60 * 1000);
+      return data.filter(d => d.datetime >= limit);
+    }
+
+    function filterDays(data, days) {
+      const limit = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      return data.filter(d => d.datetime >= limit);
+    }
+
+    function aggregateData(data, bucketHours) {
+      const buckets = new Map();
+
+      for (const row of data) {
+        const dt = new Date(row.datetime);
+        const bucketStart = new Date(dt);
+        bucketStart.setMinutes(0, 0, 0);
+
+        const bucketHour = Math.floor(bucketStart.getHours() / bucketHours) * bucketHours;
+        bucketStart.setHours(bucketHour);
+
+        const key = bucketStart.toISOString();
+
+        if (!buckets.has(key)) {
+          buckets.set(key, {
+            datetime: bucketStart,
+            tempSum: 0,
+            humSum: 0,
+            pressSum: 0,
+            windSum: 0,
+            count: 0
+          });
+        }
+
+        const b = buckets.get(key);
+        b.tempSum += row.temp;
+        b.humSum += row.hum;
+        b.pressSum += row.press;
+        b.windSum += row.wind;
+        b.count += 1;
+      }
+
+      return Array.from(buckets.values()).map(b => ({
+        datetime: b.datetime,
+        temp: +(b.tempSum / b.count).toFixed(1),
+        hum: +(b.humSum / b.count).toFixed(1),
+        press: +(b.pressSum / b.count).toFixed(1),
+        wind: +(b.windSum / b.count).toFixed(1)
+      })).sort((a, b) => a.datetime - b.datetime);
     }
 
     function getWeatherIcon(temp) {
@@ -182,7 +284,10 @@
 
     function updateBodyBackground() {
       const hour = new Date().getHours();
-      document.body.style.background = (hour >= 6 && hour < 18) ? "#87cefa" : "#0f172a";
+      const isDay = hour >= 6 && hour < 18;
+
+      document.body.style.background = isDay ? "#87cefa" : "#0f172a";
+      document.getElementById("pageTitle").style.color = isDay ? "#0b3b8c" : "#e2e8f0";
     }
 
     const tempIconPlugin = {
@@ -212,7 +317,7 @@
         const meta = chart.getDatasetMeta(0);
         const timestamps = pluginOptions?.timestamps || [];
 
-        if (!meta?.data?.length || !timestamps.length) return;
+        if (!meta?.data?.length || !timestamps.length || currentRange !== "24h") return;
 
         ctx.save();
         ctx.font = "12px Arial";
@@ -223,27 +328,47 @@
         meta.data.forEach((point, i) => {
           const dt = new Date(timestamps[i]);
           if (isNaN(dt.getTime())) return;
-
           if (dt.getHours() % 4 !== 0) return;
 
-          const hour = dt.getHours();
-          const icon = (hour >= 6 && hour < 18) ? "🌞" : "🌙";
-          const x = point.x;
-          const y = chart.chartArea.bottom + 28;
-
-          ctx.fillText(icon, x, y);
+          const icon = (dt.getHours() >= 6 && dt.getHours() < 18) ? "🌞" : "🌙";
+          ctx.fillText(icon, point.x, chart.chartArea.bottom + 28);
         });
 
         ctx.restore();
       }
     };
 
+    function getXAxisTickLimit() {
+      if (currentRange === "24h") return 8;
+      if (currentRange === "week") return 10;
+      return 12;
+    }
+
+    function getLabels(data) {
+      if (currentRange === "24h") {
+        return data.map(d => d.datetime.toLocaleTimeString("cs-CZ", {
+          hour: "2-digit",
+          minute: "2-digit"
+        }));
+      }
+
+      if (currentRange === "week") {
+        return data.map(d => d.datetime.toLocaleString("cs-CZ", {
+          day: "2-digit",
+          month: "2-digit",
+          hour: "2-digit"
+        }));
+      }
+
+      return data.map(d => d.datetime.toLocaleString("cs-CZ", {
+        day: "2-digit",
+        month: "2-digit"
+      }));
+    }
+
     function createOrUpdateChart(id, label, data, key, color, isTemp = false, plugins = []) {
       const canvas = document.getElementById(id);
-      const labels = data.map(d => d.datetime.toLocaleTimeString("cs-CZ", {
-        hour: "2-digit",
-        minute: "2-digit"
-      }));
+      const labels = getLabels(data);
       const values = data.map(d => d[key]);
       const timestamps = data.map(d => d.datetime.toISOString());
 
@@ -254,16 +379,15 @@
 
       const pointRadius = values.map((v, i) => i === values.length - 1 ? 6 : 3);
 
+      let borderColor = color;
+      if (isTemp) {
+        const grad = canvas.getContext("2d").createLinearGradient(0, 0, 0, 300);
+        grad.addColorStop(0, "#00f");
+        grad.addColorStop(1, "#7ec0ff");
+        borderColor = grad;
+      }
+
       if (!charts[id]) {
-        let borderColor = color;
-
-        if (isTemp) {
-          const grad = canvas.getContext("2d").createLinearGradient(0, 0, 0, 300);
-          grad.addColorStop(0, "#00f");
-          grad.addColorStop(1, "#7ec0ff");
-          borderColor = grad;
-        }
-
         const dataset = {
           label,
           data: values,
@@ -288,7 +412,7 @@
             maintainAspectRatio: false,
             layout: {
               padding: {
-                bottom: 36
+                bottom: currentRange === "24h" ? 36 : 8
               }
             },
             scales: {
@@ -297,7 +421,7 @@
                   color: "white",
                   maxRotation: 0,
                   autoSkip: true,
-                  maxTicksLimit: 8
+                  maxTicksLimit: getXAxisTickLimit()
                 },
                 grid: {
                   color: "#374151"
@@ -328,6 +452,21 @@
               },
               dayNightIcons: {
                 timestamps
+              },
+              zoom: {
+                pan: {
+                  enabled: true,
+                  mode: "x"
+                },
+                zoom: {
+                  wheel: {
+                    enabled: true
+                  },
+                  pinch: {
+                    enabled: true
+                  },
+                  mode: "x"
+                }
               }
             }
           },
@@ -336,81 +475,138 @@
       } else {
         charts[id].data.labels = labels;
         charts[id].data.datasets[0].data = values;
+        charts[id].data.datasets[0].borderColor = borderColor;
         charts[id].data.datasets[0].pointBackgroundColor = pointBackgroundColors;
         charts[id].data.datasets[0].pointBorderColor = pointBackgroundColors;
         charts[id].data.datasets[0].pointRadius = pointRadius;
         charts[id].data.datasets[0].pointHoverRadius = pointRadius.map(r => r + 1);
+        charts[id].options.layout.padding.bottom = currentRange === "24h" ? 36 : 8;
+        charts[id].options.scales.x.ticks.maxTicksLimit = getXAxisTickLimit();
         charts[id].options.plugins.dayNightIcons = { timestamps };
         charts[id].update();
       }
     }
 
+    function getFilteredData() {
+      if (currentRange === "24h") {
+        return filterHours(historyData, 24);
+      }
+
+      if (currentRange === "week") {
+        return aggregateData(filterDays(historyData, 7), 1);
+      }
+
+      return aggregateData(filterDays(historyData, 30), 6);
+    }
+
+    function updateTitle() {
+      const title = document.getElementById("pageTitle");
+      if (currentRange === "24h") title.textContent = "Meteostanice – posledních 24 hodin";
+      if (currentRange === "week") title.textContent = "Meteostanice – posledních 7 dní";
+      if (currentRange === "month") title.textContent = "Meteostanice – posledních 30 dní";
+    }
+
+    function renderCharts() {
+      const data = getFilteredData();
+      if (!data.length) {
+        document.getElementById("lastUpdate").textContent = "Nebyla nalezena žádná historická data";
+        return;
+      }
+
+      updateTitle();
+
+      createOrUpdateChart(
+        "tempChart",
+        "Teplota (°C)",
+        data,
+        "temp",
+        "blue",
+        true,
+        [tempIconPlugin, dayNightIconsPlugin]
+      );
+
+      createOrUpdateChart(
+        "humChart",
+        "Vlhkost (%)",
+        data,
+        "hum",
+        "green",
+        false,
+        [dayNightIconsPlugin]
+      );
+
+      createOrUpdateChart(
+        "pressChart",
+        "Tlak (hPa)",
+        data,
+        "press",
+        "yellow",
+        false,
+        [dayNightIconsPlugin]
+      );
+
+      createOrUpdateChart(
+        "windChart",
+        "Vítr (m/s)",
+        data,
+        "wind",
+        "red",
+        false,
+        [dayNightIconsPlugin]
+      );
+
+      const last = data[data.length - 1];
+      document.getElementById("tempVal").textContent = last.temp + " °C";
+      document.getElementById("humVal").textContent = "💧 " + last.hum + "%";
+      document.getElementById("pressVal").textContent = last.press + " hPa";
+      document.getElementById("windVal").textContent = "🌬️ " + last.wind + " m/s";
+    }
+
+    function resetAllZoom() {
+      Object.values(charts).forEach(chart => {
+        if (chart && typeof chart.resetZoom === "function") {
+          chart.resetZoom();
+        }
+      });
+    }
+
+    function exportChart(chartId, filename) {
+      const canvas = document.getElementById(chartId);
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = filename;
+      link.click();
+    }
+
+    function exportAllCharts() {
+      exportChart("tempChart", "teplota.png");
+      setTimeout(() => exportChart("humChart", "vlhkost.png"), 150);
+      setTimeout(() => exportChart("pressChart", "tlak.png"), 300);
+      setTimeout(() => exportChart("windChart", "vitr.png"), 450);
+    }
+
     async function updateCharts() {
       try {
-        const data = await loadData();
+        historyData = await loadHistory();
 
-        if (data.length === 0) {
+        if (!historyData.length) {
           document.getElementById("lastUpdate").textContent =
-            "Nebyla nalezena žádná data za posledních 24 hodin";
+            "Nebyla nalezena žádná data v history.csv";
           return;
         }
 
-        createOrUpdateChart(
-          "tempChart",
-          "Teplota (°C)",
-          data,
-          "temp",
-          "blue",
-          true,
-          [tempIconPlugin, dayNightIconsPlugin]
-        );
-
-        createOrUpdateChart(
-          "humChart",
-          "Vlhkost (%)",
-          data,
-          "hum",
-          "green",
-          false,
-          [dayNightIconsPlugin]
-        );
-
-        createOrUpdateChart(
-          "pressChart",
-          "Tlak (hPa)",
-          data,
-          "press",
-          "yellow",
-          false,
-          [dayNightIconsPlugin]
-        );
-
-        createOrUpdateChart(
-          "windChart",
-          "Vítr (m/s)",
-          data,
-          "wind",
-          "red",
-          false,
-          [dayNightIconsPlugin]
-        );
-
-        const last = data[data.length - 1];
+        const last = historyData[historyData.length - 1];
 
         document.getElementById("lastUpdate").textContent =
           "Poslední aktualizace: " + new Date().toLocaleTimeString("cs-CZ");
 
         document.getElementById("weatherIcon").textContent = getWeatherIcon(last.temp);
-        document.getElementById("tempVal").textContent = last.temp + " °C";
-        document.getElementById("humVal").textContent = "💧 " + last.hum + "%";
-        document.getElementById("pressVal").textContent = last.press + " hPa";
-        document.getElementById("windVal").textContent = "🌬️ " + last.wind + " m/s";
 
         updateBodyBackground();
+        renderCharts();
       } catch (error) {
         console.error(error);
-        document.getElementById("lastUpdate").textContent =
-          "Chyba při načítání dat";
+        document.getElementById("lastUpdate").textContent = "Chyba při načítání dat";
       }
     }
 
