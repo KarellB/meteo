@@ -106,6 +106,23 @@
       z-index: 2;
     }
 
+    .chartjs-ext-tooltip {
+      position: absolute;
+      background: rgba(15, 23, 42, 0.96);
+      color: white;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      line-height: 1.3;
+      pointer-events: none;
+      transform: translate(-50%, calc(-100% - 10px));
+      white-space: nowrap;
+      z-index: 30;
+      display: none;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    }
+
     @media (max-width: 900px) {
       .grid {
         grid-template-columns: 1fr;
@@ -181,16 +198,10 @@
 
     function updateTitle() {
       const title = document.getElementById("pageTitle");
-
-      if (currentRange === "24h") {
-        title.textContent = "Meteostanice Papago Jilemnice – posledních 24 hodin";
-      } else if (currentRange === "week") {
-        title.textContent = "Meteostanice Papago Jilemnice – poslední týden";
-      } else if (currentRange === "month") {
-        title.textContent = "Meteostanice Papago Jilemnice – posledních 30 dní";
-      } else if (currentRange === "year") {
-        title.textContent = "Meteostanice Papago Jilemnice – poslední rok";
-      }
+      if (currentRange === "24h") title.textContent = "Meteostanice Papago Jilemnice – posledních 24 hodin";
+      else if (currentRange === "week") title.textContent = "Meteostanice Papago Jilemnice – poslední týden";
+      else if (currentRange === "month") title.textContent = "Meteostanice Papago Jilemnice – posledních 30 dní";
+      else title.textContent = "Meteostanice Papago Jilemnice – poslední rok";
     }
 
     async function loadHistory() {
@@ -258,7 +269,6 @@
         const dt = new Date(row.datetime);
         const bucketStart = new Date(dt);
         bucketStart.setMinutes(0, 0, 0);
-
         const bucketHour = Math.floor(bucketStart.getHours() / bucketHours) * bucketHours;
         bucketStart.setHours(bucketHour);
 
@@ -308,6 +318,45 @@
       document.getElementById("lastUpdate").style.color = titleColor;
     }
 
+    function getOrCreateExternalTooltip(chart) {
+      const parent = chart.canvas.parentNode;
+      let tooltipEl = parent.querySelector(".chartjs-ext-tooltip");
+      if (!tooltipEl) {
+        tooltipEl = document.createElement("div");
+        tooltipEl.className = "chartjs-ext-tooltip";
+        parent.appendChild(tooltipEl);
+      }
+      return tooltipEl;
+    }
+
+    const externalSingleTooltip = {
+      id: "externalSingleTooltip",
+      afterDraw(chart, args, pluginOptions) {
+        if (currentRange !== "24h") return;
+
+        const tooltipEl = getOrCreateExternalTooltip(chart);
+        const active = chart.getActiveElements();
+
+        if (!active || active.length === 0) {
+          tooltipEl.style.display = "none";
+          return;
+        }
+
+        const first = active[0];
+        const point = chart.getDatasetMeta(first.datasetIndex).data[first.index];
+        const item = pluginOptions.data[first.index];
+        const label = chart.data.datasets[first.datasetIndex].label;
+        const value = item[pluginOptions.key];
+
+        tooltipEl.textContent =
+          `${label}: ${value} (${item.datetime.toLocaleDateString("cs-CZ")} ${item.datetime.toLocaleTimeString("cs-CZ")})`;
+
+        tooltipEl.style.display = "block";
+        tooltipEl.style.left = `${point.x}px`;
+        tooltipEl.style.top = `${point.y}px`;
+      }
+    };
+
     const tempIconPlugin = {
       id: "tempIcon",
       afterDatasetsDraw(chart) {
@@ -315,7 +364,6 @@
         const dataset = chart.data.datasets[0];
         const meta = chart.getDatasetMeta(0);
         const lastPoint = meta.data[meta.data.length - 1];
-
         if (!lastPoint) return;
 
         const value = currentRange === "24h"
@@ -360,9 +408,8 @@
       }));
     }
 
-    function createOrUpdateChart(id, label, data, key, color, isTemp = false, plugins = []) {
+    function createOrUpdateChart(id, label, data, key, color, isTemp = false) {
       const canvas = document.getElementById(id);
-
       const scatterValues = data.map(d => ({ x: d.datetime, y: d[key] }));
       const labels = getLabels(data);
       const values = data.map(d => d[key]);
@@ -396,8 +443,8 @@
         pointBorderColor: pointBackgroundColors,
         pointRadius,
         pointHoverRadius: pointRadius.map(r => r + 1),
-        pointHitRadius: 10,
-        hitRadius: 10,
+        pointHitRadius: 12,
+        hitRadius: 12,
         borderWidth: is24h ? 0 : 2
       };
 
@@ -408,16 +455,10 @@
             type: "time",
             time: {
               unit: "hour",
-              displayFormats: {
-                hour: "HH:mm"
-              }
+              displayFormats: { hour: "HH:mm" }
             },
-            ticks: {
-              color: "white"
-            },
-            grid: {
-              color: "#374151"
-            }
+            ticks: { color: "white" },
+            grid: { color: "#374151" }
           }
         : {
             ticks: {
@@ -426,31 +467,17 @@
               autoSkip: true,
               maxTicksLimit: getXAxisTickLimit()
             },
-            grid: {
-              color: "#374151"
-            }
+            grid: { color: "#374151" }
           };
 
-      const tooltipOptions = {
-        enabled: true,
-        mode: "nearest",
-        intersect: true,
-        displayColors: false,
-        filter: function(context) {
-          return context.datasetIndex === 0;
-        },
-        callbacks: {
-          title: function() {
-            return "";
-          },
-          label: function(context) {
-            const idx = context.dataIndex;
-            const dt = data[idx].datetime;
-            const value = is24h ? context.raw.y : context.formattedValue;
-            return `${label}: ${value} (${dt.toLocaleDateString("cs-CZ")} ${dt.toLocaleTimeString("cs-CZ")})`;
-          }
-        }
-      };
+      const extraPlugins = [];
+      if (isTemp) extraPlugins.push(tempIconPlugin);
+      if (is24h) extraPlugins.push({
+        ...externalSingleTooltip,
+        id: `externalSingleTooltip-${id}`,
+        data,
+        key
+      });
 
       if (!charts[id] || charts[id].config.type !== chartType) {
         if (charts[id]) charts[id].destroy();
@@ -465,9 +492,7 @@
             responsive: true,
             maintainAspectRatio: false,
             layout: {
-              padding: {
-                bottom: 8
-              }
+              padding: { bottom: 8 }
             },
             interaction: {
               mode: "nearest",
@@ -477,39 +502,42 @@
             scales: {
               x: xScale,
               y: {
-                ticks: {
-                  color: "white"
-                },
-                grid: {
-                  color: "#374151"
-                }
+                ticks: { color: "white" },
+                grid: { color: "#374151" }
               }
             },
             plugins: {
               legend: {
-                labels: {
-                  color: "white"
+                labels: { color: "white" }
+              },
+              tooltip: {
+                enabled: !is24h,
+                mode: "nearest",
+                intersect: true,
+                displayColors: false,
+                callbacks: {
+                  label: function(context) {
+                    const idx = context.dataIndex;
+                    const dt = data[idx].datetime;
+                    const value = is24h ? context.raw.y : context.formattedValue;
+                    return `${label}: ${value} (${dt.toLocaleDateString("cs-CZ")} ${dt.toLocaleTimeString("cs-CZ")})`;
+                  }
                 }
               },
-              tooltip: tooltipOptions,
               zoom: {
                 pan: {
                   enabled: true,
                   mode: "x"
                 },
                 zoom: {
-                  wheel: {
-                    enabled: true
-                  },
-                  pinch: {
-                    enabled: true
-                  },
+                  wheel: { enabled: true },
+                  pinch: { enabled: true },
                   mode: "x"
                 }
               }
             }
           },
-          plugins
+          plugins: extraPlugins
         });
       } else {
         charts[id].data.labels = is24h ? [] : labels;
@@ -519,34 +547,23 @@
         charts[id].data.datasets[0].pointBorderColor = pointBackgroundColors;
         charts[id].data.datasets[0].pointRadius = pointRadius;
         charts[id].data.datasets[0].pointHoverRadius = pointRadius.map(r => r + 1);
-        charts[id].data.datasets[0].pointHitRadius = 10;
-        charts[id].data.datasets[0].hitRadius = 10;
+        charts[id].data.datasets[0].pointHitRadius = 12;
+        charts[id].data.datasets[0].hitRadius = 12;
         charts[id].data.datasets[0].showLine = !is24h;
         charts[id].data.datasets[0].borderWidth = is24h ? 0 : 2;
         charts[id].options.scales.x = xScale;
-        charts[id].options.interaction = {
-          mode: "nearest",
-          intersect: true,
-          axis: "xy"
-        };
-        charts[id].options.plugins.tooltip = tooltipOptions;
+        charts[id].options.plugins.tooltip.enabled = !is24h;
         charts[id].update();
+
+        const tooltipEl = charts[id].canvas.parentNode.querySelector(".chartjs-ext-tooltip");
+        if (tooltipEl && !is24h) tooltipEl.style.display = "none";
       }
     }
 
     function getFilteredData() {
-      if (currentRange === "24h") {
-        return filterHours(historyData, 24);
-      }
-
-      if (currentRange === "week") {
-        return aggregateData(filterDays(historyData, 7), 1);
-      }
-
-      if (currentRange === "month") {
-        return aggregateData(filterDays(historyData, 30), 6);
-      }
-
+      if (currentRange === "24h") return filterHours(historyData, 24);
+      if (currentRange === "week") return aggregateData(filterDays(historyData, 7), 1);
+      if (currentRange === "month") return aggregateData(filterDays(historyData, 30), 6);
       return aggregateData(filterDays(historyData, 365), 24);
     }
 
@@ -559,10 +576,10 @@
         return;
       }
 
-      createOrUpdateChart("tempChart", "Teplota (°C)", data, "temp", "blue", true, [tempIconPlugin]);
-      createOrUpdateChart("humChart", "Vlhkost (%)", data, "hum", "green", false, []);
-      createOrUpdateChart("pressChart", "Tlak (hPa)", data, "press", "yellow", false, []);
-      createOrUpdateChart("windChart", "Vítr (m/s)", data, "wind", "red", false, []);
+      createOrUpdateChart("tempChart", "Teplota (°C)", data, "temp", "blue", true);
+      createOrUpdateChart("humChart", "Vlhkost (%)", data, "hum", "green", false);
+      createOrUpdateChart("pressChart", "Tlak (hPa)", data, "press", "yellow", false);
+      createOrUpdateChart("windChart", "Vítr (m/s)", data, "wind", "red", false);
 
       const last = data[data.length - 1];
       document.getElementById("tempVal").textContent = last.temp + " °C";
@@ -599,8 +616,7 @@
         historyData = await loadHistory();
 
         if (!historyData.length) {
-          document.getElementById("lastUpdate").textContent =
-            "Nebyla nalezena žádná data v history.csv";
+          document.getElementById("lastUpdate").textContent = "Nebyla nalezena žádná data v history.csv";
           return;
         }
 
