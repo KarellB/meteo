@@ -106,22 +106,6 @@
       z-index: 2;
     }
 
-    .chart-tooltip {
-      position: absolute;
-      transform: translate(-50%, -120%);
-      background: rgba(15, 23, 42, 0.95);
-      color: #fff;
-      border: 1px solid rgba(148, 163, 184, 0.35);
-      border-radius: 8px;
-      padding: 8px 10px;
-      font-size: 13px;
-      pointer-events: none;
-      white-space: nowrap;
-      z-index: 20;
-      display: none;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-    }
-
     @media (max-width: 900px) {
       .grid {
         grid-template-columns: 1fr;
@@ -324,47 +308,6 @@
       document.getElementById("lastUpdate").style.color = titleColor;
     }
 
-    function getOrCreateTooltip(chart) {
-      const parent = chart.canvas.parentNode;
-      let tooltipEl = parent.querySelector(".chart-tooltip");
-
-      if (!tooltipEl) {
-        tooltipEl = document.createElement("div");
-        tooltipEl.className = "chart-tooltip";
-        parent.appendChild(tooltipEl);
-      }
-
-      return tooltipEl;
-    }
-
-    const singleTooltipPlugin = {
-      id: "singleTooltip",
-      afterDraw(chart) {
-        const tooltip = chart.tooltip;
-        const tooltipEl = getOrCreateTooltip(chart);
-
-        if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints || !tooltip.dataPoints.length) {
-          tooltipEl.style.display = "none";
-          return;
-        }
-
-        const dp = tooltip.dataPoints[0];
-        const raw = dp.raw;
-        const xVal = raw && typeof raw === "object" && raw.x ? new Date(raw.x) : null;
-        const yVal = raw && typeof raw === "object" ? raw.y : dp.formattedValue;
-
-        const label = chart.data.datasets[dp.datasetIndex].label;
-        const dateText = xVal && !isNaN(xVal)
-          ? `${xVal.toLocaleDateString("cs-CZ")} ${xVal.toLocaleTimeString("cs-CZ")}`
-          : "";
-
-        tooltipEl.textContent = `${label}: ${yVal} (${dateText})`;
-        tooltipEl.style.display = "block";
-        tooltipEl.style.left = tooltip.caretX + "px";
-        tooltipEl.style.top = tooltip.caretY + "px";
-      }
-    };
-
     const tempIconPlugin = {
       id: "tempIcon",
       afterDatasetsDraw(chart) {
@@ -488,12 +431,29 @@
             }
           };
 
-      const chartPlugins = is24h ? [...plugins, singleTooltipPlugin] : plugins;
+      const tooltipOptions = {
+        enabled: true,
+        mode: "nearest",
+        intersect: true,
+        displayColors: false,
+        filter: function(context) {
+          return context.datasetIndex === 0;
+        },
+        callbacks: {
+          title: function() {
+            return "";
+          },
+          label: function(context) {
+            const idx = context.dataIndex;
+            const dt = data[idx].datetime;
+            const value = is24h ? context.raw.y : context.formattedValue;
+            return `${label}: ${value} (${dt.toLocaleDateString("cs-CZ")} ${dt.toLocaleTimeString("cs-CZ")})`;
+          }
+        }
+      };
 
       if (!charts[id] || charts[id].config.type !== chartType) {
-        if (charts[id]) {
-          charts[id].destroy();
-        }
+        if (charts[id]) charts[id].destroy();
 
         charts[id] = new Chart(canvas, {
           type: chartType,
@@ -531,20 +491,7 @@
                   color: "white"
                 }
               },
-              tooltip: is24h ? {
-                enabled: false
-              } : {
-                mode: "nearest",
-                intersect: true,
-                displayColors: false,
-                callbacks: {
-                  label: function(context) {
-                    const idx = context.dataIndex;
-                    const dt = data[idx].datetime;
-                    return `${label}: ${context.formattedValue} (${dt.toLocaleDateString("cs-CZ")} ${dt.toLocaleTimeString("cs-CZ")})`;
-                  }
-                }
-              },
+              tooltip: tooltipOptions,
               zoom: {
                 pan: {
                   enabled: true,
@@ -562,7 +509,7 @@
               }
             }
           },
-          plugins: chartPlugins
+          plugins
         });
       } else {
         charts[id].data.labels = is24h ? [] : labels;
@@ -582,18 +529,7 @@
           intersect: true,
           axis: "xy"
         };
-        charts[id].options.plugins.tooltip = is24h ? { enabled: false } : {
-          mode: "nearest",
-          intersect: true,
-          displayColors: false,
-          callbacks: {
-            label: function(context) {
-              const idx = context.dataIndex;
-              const dt = data[idx].datetime;
-              return `${label}: ${context.formattedValue} (${dt.toLocaleDateString("cs-CZ")} ${dt.toLocaleTimeString("cs-CZ")})`;
-            }
-          }
-        };
+        charts[id].options.plugins.tooltip = tooltipOptions;
         charts[id].update();
       }
     }
@@ -623,45 +559,10 @@
         return;
       }
 
-      createOrUpdateChart(
-        "tempChart",
-        "Teplota (°C)",
-        data,
-        "temp",
-        "blue",
-        true,
-        [tempIconPlugin]
-      );
-
-      createOrUpdateChart(
-        "humChart",
-        "Vlhkost (%)",
-        data,
-        "hum",
-        "green",
-        false,
-        []
-      );
-
-      createOrUpdateChart(
-        "pressChart",
-        "Tlak (hPa)",
-        data,
-        "press",
-        "yellow",
-        false,
-        []
-      );
-
-      createOrUpdateChart(
-        "windChart",
-        "Vítr (m/s)",
-        data,
-        "wind",
-        "red",
-        false,
-        []
-      );
+      createOrUpdateChart("tempChart", "Teplota (°C)", data, "temp", "blue", true, [tempIconPlugin]);
+      createOrUpdateChart("humChart", "Vlhkost (%)", data, "hum", "green", false, []);
+      createOrUpdateChart("pressChart", "Tlak (hPa)", data, "press", "yellow", false, []);
+      createOrUpdateChart("windChart", "Vítr (m/s)", data, "wind", "red", false, []);
 
       const last = data[data.length - 1];
       document.getElementById("tempVal").textContent = last.temp + " °C";
