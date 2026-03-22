@@ -396,7 +396,8 @@
         pointBorderColor: pointBackgroundColors,
         pointRadius,
         pointHoverRadius: pointRadius.map(r => r + 1),
-        pointHitRadius: 8,
+        pointHitRadius: 10,
+        hitRadius: 10,
         borderWidth: is24h ? 0 : 2
       };
 
@@ -449,6 +450,11 @@
                 bottom: 8
               }
             },
+            interaction: {
+              mode: "nearest",
+              intersect: true,
+              axis: "xy"
+            },
             scales: {
               x: xScale,
               y: {
@@ -467,6 +473,11 @@
                 }
               },
               tooltip: {
+                mode: "nearest",
+                intersect: true,
+                filter: function(tooltipItem) {
+                  return tooltipItem.datasetIndex === 0;
+                },
                 callbacks: {
                   label: function(context) {
                     const idx = context.dataIndex;
@@ -503,9 +514,18 @@
         charts[id].data.datasets[0].pointBorderColor = pointBackgroundColors;
         charts[id].data.datasets[0].pointRadius = pointRadius;
         charts[id].data.datasets[0].pointHoverRadius = pointRadius.map(r => r + 1);
+        charts[id].data.datasets[0].pointHitRadius = 10;
+        charts[id].data.datasets[0].hitRadius = 10;
         charts[id].data.datasets[0].showLine = !is24h;
         charts[id].data.datasets[0].borderWidth = is24h ? 0 : 2;
         charts[id].options.scales.x = xScale;
+        charts[id].options.interaction = {
+          mode: "nearest",
+          intersect: true,
+          axis: "xy"
+        };
+        charts[id].options.plugins.tooltip.mode = "nearest";
+        charts[id].options.plugins.tooltip.intersect = true;
         charts[id].update();
       }
     }
