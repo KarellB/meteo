@@ -389,13 +389,14 @@
           data: values,
           fill: false,
           tension: 0,
+          showLine: currentRange !== "24h",
           borderColor,
           pointBackgroundColor: pointBackgroundColors,
           pointBorderColor: pointBackgroundColors,
           pointRadius,
           pointHoverRadius: pointRadius.map(r => r + 1),
           pointHitRadius: 8,
-          borderWidth: 2
+          borderWidth: currentRange === "24h" ? 0 : 2
         };
 
         charts[id] = new Chart(canvas, {
@@ -474,6 +475,8 @@
         charts[id].data.datasets[0].pointBorderColor = pointBackgroundColors;
         charts[id].data.datasets[0].pointRadius = pointRadius;
         charts[id].data.datasets[0].pointHoverRadius = pointRadius.map(r => r + 1);
+        charts[id].data.datasets[0].showLine = currentRange !== "24h";
+        charts[id].data.datasets[0].borderWidth = currentRange === "24h" ? 0 : 2;
         charts[id].update();
       }
     }
