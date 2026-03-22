@@ -376,8 +376,6 @@
       });
 
       const pointRadius = data.map((d, i) => i === data.length - 1 ? 6 : 4);
-      const pointHoverRadius = pointRadius.map(r => r + 1);
-      const pointHitRadius = is24h ? 2 : 12;
 
       let borderColor = color;
       if (isTemp && !is24h) {
@@ -397,9 +395,9 @@
         pointBackgroundColor: pointBackgroundColors,
         pointBorderColor: pointBackgroundColors,
         pointRadius,
-        pointHoverRadius,
-        pointHitRadius,
-        hitRadius: pointHitRadius,
+        pointHoverRadius: pointRadius.map(r => r + 1),
+        pointHitRadius: is24h ? 4 : 12,
+        hitRadius: is24h ? 4 : 12,
         borderWidth: is24h ? 0 : 2
       };
 
@@ -434,21 +432,43 @@
           };
 
       const tooltipOptions = is24h ? {
-        enabled: true,
-        mode: "point",
-        intersect: true,
-        displayColors: false,
-        filter: function(item) {
-          return item.dataIndex === item.chart.getActiveElements()[0]?.index;
-        },
-        callbacks: {
-          title: function() {
-            return "";
-          },
-          label: function(context) {
-            const dt = new Date(context.raw.x);
-            return `${label}: ${context.raw.y} (${dt.toLocaleDateString("cs-CZ")} ${dt.toLocaleTimeString("cs-CZ")})`;
+        enabled: false,
+        external: function(context) {
+          let tooltipEl = document.getElementById("chartjs-tooltip-single");
+          if (!tooltipEl) {
+            tooltipEl = document.createElement("div");
+            tooltipEl.id = "chartjs-tooltip-single";
+            tooltipEl.style.position = "absolute";
+            tooltipEl.style.background = "rgba(17, 24, 39, 0.95)";
+            tooltipEl.style.color = "white";
+            tooltipEl.style.border = "1px solid #4b5563";
+            tooltipEl.style.borderRadius = "6px";
+            tooltipEl.style.padding = "6px 8px";
+            tooltipEl.style.font = "12px Arial";
+            tooltipEl.style.pointerEvents = "none";
+            tooltipEl.style.whiteSpace = "nowrap";
+            tooltipEl.style.zIndex = "10000";
+            tooltipEl.style.transform = "translate(-50%, calc(-100% - 8px))";
+            tooltipEl.style.transition = "opacity 0.05s ease";
+            tooltipEl.style.opacity = "0";
+            document.body.appendChild(tooltipEl);
           }
+
+          const tooltip = context.tooltip;
+          if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints || !tooltip.dataPoints.length) {
+            tooltipEl.style.opacity = "0";
+            return;
+          }
+
+          const point = tooltip.dataPoints[0];
+          const dt = new Date(point.raw.x);
+          const value = point.raw.y;
+          tooltipEl.textContent = `${label}: ${value} (${dt.toLocaleDateString("cs-CZ")} ${dt.toLocaleTimeString("cs-CZ")})`;
+
+          const canvasRect = context.chart.canvas.getBoundingClientRect();
+          tooltipEl.style.left = `${canvasRect.left + window.pageXOffset + tooltip.caretX}px`;
+          tooltipEl.style.top = `${canvasRect.top + window.pageYOffset + tooltip.caretY}px`;
+          tooltipEl.style.opacity = "1";
         }
       } : {
         enabled: true,
@@ -535,13 +555,12 @@
         charts[id].data.datasets[0].pointBackgroundColor = pointBackgroundColors;
         charts[id].data.datasets[0].pointBorderColor = pointBackgroundColors;
         charts[id].data.datasets[0].pointRadius = pointRadius;
-        charts[id].data.datasets[0].pointHoverRadius = pointHoverRadius;
-        charts[id].data.datasets[0].pointHitRadius = pointHitRadius;
-        charts[id].data.datasets[0].hitRadius = pointHitRadius;
+        charts[id].data.datasets[0].pointHoverRadius = pointRadius.map(r => r + 1);
+        charts[id].data.datasets[0].pointHitRadius = is24h ? 4 : 12;
+        charts[id].data.datasets[0].hitRadius = is24h ? 4 : 12;
         charts[id].data.datasets[0].showLine = !is24h;
         charts[id].data.datasets[0].borderWidth = is24h ? 0 : 2;
         charts[id].options.scales.x = xScale;
-        charts[id].options.interaction.mode = is24h ? "point" : "nearest";
         charts[id].options.plugins.tooltip = tooltipOptions;
         charts[id].update("none");
       }
