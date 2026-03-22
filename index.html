@@ -379,6 +379,23 @@
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
     }
 
+    .embed-stage {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: #0b1220;
+    }
+
+    .embed-scaler {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      transform-origin: top left;
+      transition: transform 0.2s ease;
+    }
+
     .radar-frame {
       width: 100%;
       height: 100%;
@@ -466,6 +483,12 @@
       background: #0b1220;
     }
 
+    .satellite-frame,
+    .radar-frame {
+      min-width: 100%;
+      min-height: 100%;
+    }
+
     .satellite-note {
       margin-top: 10px;
       color: #cbd5e1;
@@ -545,6 +568,12 @@
         min-height: 300px;
         max-height: 460px;
         border-radius: 16px;
+      }
+
+      .embed-scaler {
+        width: 118%;
+        height: 118%;
+        transform: scale(0.8474576271);
       }
     }
 
@@ -639,6 +668,12 @@
         max-height: 380px;
       }
 
+      .embed-scaler {
+        width: 136%;
+        height: 136%;
+        transform: scale(0.7352941176);
+      }
+
       .radar-note,
       .satellite-note {
         font-size: 12px;
@@ -714,7 +749,7 @@
           <div class="media-summary-icon">🛰️</div>
           <div class="media-summary-text">
             <div class="media-summary-title">Aktuální satelitní snímek 24h-M</div>
-            <div class="media-summary-subtitle">Na mobilu je sekce ve výchozím stavu sbalená, na větších displejích otevřená.</div>
+            <div class="media-summary-subtitle">Na mobilu je sekce ve výchozím stavu sbalená, na větších displejích otevřená. Vložený obraz se zmenšuje tak, aby lépe seděl do rámu.</div>
           </div>
         </div>
         <div class="media-summary-arrow">⌄</div>
@@ -729,13 +764,17 @@
             </div>
           </div>
           <div class="satellite-frame-wrap">
-            <iframe
-              id="satelliteFrame"
-              class="satellite-frame"
-              loading="lazy"
-              referrerpolicy="no-referrer"
-              src="https://intranet.chmi.cz/files/portal/docs/meteo/sat/data_jsmsgview.html">
-            </iframe>
+            <div class="embed-stage">
+              <div class="embed-scaler">
+                <iframe
+                  id="satelliteFrame"
+                  class="satellite-frame"
+                  loading="lazy"
+                  referrerpolicy="no-referrer"
+                  src="https://intranet.chmi.cz/files/portal/docs/meteo/sat/data_jsmsgview.html">
+                </iframe>
+              </div>
+            </div>
           </div>
           <div class="satellite-note">
             Zobrazený panel se automaticky obnovuje každých 15 minut. Kdyby se v některém prohlížeči nevykreslil správně, otevřete přímo
@@ -756,13 +795,17 @@
         </div>
       </div>
       <div class="radar-frame-wrap">
-        <iframe
-          id="radarFrame"
-          class="radar-frame"
-          loading="lazy"
-          referrerpolicy="no-referrer"
-          src="https://intranet.chmi.cz/files/portal/docs/meteo/rad/inca-cz/short.html">
-        </iframe>
+        <div class="embed-stage">
+          <div class="embed-scaler">
+            <iframe
+              id="radarFrame"
+              class="radar-frame"
+              loading="lazy"
+              referrerpolicy="no-referrer"
+              src="https://intranet.chmi.cz/files/portal/docs/meteo/rad/inca-cz/short.html">
+            </iframe>
+          </div>
+        </div>
       </div>
       <div class="radar-note">
         Radarová vrstva se automaticky obnovuje každých 10 minut. Pokud se nevykreslí správně, otevřete přímo
