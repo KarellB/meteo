@@ -437,14 +437,12 @@
         intersect: true,
         displayColors: false,
         callbacks: {
-          title: function(items) {
-            if (!items.length) return "";
-            const item = items[0].raw;
-            const dt = new Date(item.x);
-            return `${dt.toLocaleDateString("cs-CZ")} ${dt.toLocaleTimeString("cs-CZ")}`;
+          title: function() {
+            return "";
           },
           label: function(context) {
-            return `${label}: ${context.raw.y}`;
+            const dt = new Date(context.raw.x);
+            return `${label}: ${context.raw.y} (${dt.toLocaleDateString("cs-CZ")} ${dt.toLocaleTimeString("cs-CZ")})`;
           }
         }
       } : {
