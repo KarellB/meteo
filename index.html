@@ -431,6 +431,27 @@
             }
           };
 
+      const tooltipCallbacks = is24h
+        ? {
+            title: function(items) {
+              if (!items.length) return "";
+              return "";
+            },
+            label: function(context) {
+              const idx = context.dataIndex;
+              const dt = data[idx].datetime;
+              const val = context.raw.y;
+              return `${label}: ${val} (${dt.toLocaleDateString("cs-CZ")} ${dt.toLocaleTimeString("cs-CZ")})`;
+            }
+          }
+        : {
+            label: function(context) {
+              const idx = context.dataIndex;
+              const dt = data[idx].datetime;
+              return `${label}: ${context.formattedValue} (${dt.toLocaleDateString("cs-CZ")} ${dt.toLocaleTimeString("cs-CZ")})`;
+            }
+          };
+
       if (!charts[id] || charts[id].config.type !== chartType) {
         if (charts[id]) {
           charts[id].destroy();
@@ -451,9 +472,8 @@
               }
             },
             interaction: {
-              mode: "nearest",
-              intersect: true,
-              axis: "xy"
+              mode: "point",
+              intersect: true
             },
             scales: {
               x: xScale,
@@ -473,19 +493,10 @@
                 }
               },
               tooltip: {
-                mode: "nearest",
+                mode: "point",
                 intersect: true,
-                filter: function(tooltipItem) {
-                  return tooltipItem.datasetIndex === 0;
-                },
-                callbacks: {
-                  label: function(context) {
-                    const idx = context.dataIndex;
-                    const dt = data[idx].datetime;
-                    const val = is24h ? context.raw.y : context.formattedValue;
-                    return `${label}: ${val} (${dt.toLocaleDateString("cs-CZ")} ${dt.toLocaleTimeString("cs-CZ")})`;
-                  }
-                }
+                displayColors: false,
+                callbacks: tooltipCallbacks
               },
               zoom: {
                 pan: {
@@ -520,12 +531,15 @@
         charts[id].data.datasets[0].borderWidth = is24h ? 0 : 2;
         charts[id].options.scales.x = xScale;
         charts[id].options.interaction = {
-          mode: "nearest",
-          intersect: true,
-          axis: "xy"
+          mode: "point",
+          intersect: true
         };
-        charts[id].options.plugins.tooltip.mode = "nearest";
-        charts[id].options.plugins.tooltip.intersect = true;
+        charts[id].options.plugins.tooltip = {
+          mode: "point",
+          intersect: true,
+          displayColors: false,
+          callbacks: tooltipCallbacks
+        };
         charts[id].update();
       }
     }
