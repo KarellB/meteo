@@ -376,6 +376,8 @@
       });
 
       const pointRadius = data.map((d, i) => i === data.length - 1 ? 6 : 4);
+      const pointHoverRadius = pointRadius.map(r => r + 1);
+      const pointHitRadius = is24h ? 2 : 12;
 
       let borderColor = color;
       if (isTemp && !is24h) {
@@ -395,9 +397,9 @@
         pointBackgroundColor: pointBackgroundColors,
         pointBorderColor: pointBackgroundColors,
         pointRadius,
-        pointHoverRadius: pointRadius.map(r => r + 1),
-        pointHitRadius: 12,
-        hitRadius: 12,
+        pointHoverRadius,
+        pointHitRadius,
+        hitRadius: pointHitRadius,
         borderWidth: is24h ? 0 : 2
       };
 
@@ -433,9 +435,12 @@
 
       const tooltipOptions = is24h ? {
         enabled: true,
-        mode: "nearest",
+        mode: "point",
         intersect: true,
         displayColors: false,
+        filter: function(item) {
+          return item.dataIndex === item.chart.getActiveElements()[0]?.index;
+        },
         callbacks: {
           title: function() {
             return "";
@@ -482,7 +487,7 @@
               }
             },
             interaction: {
-              mode: "nearest",
+              mode: is24h ? "point" : "nearest",
               intersect: true,
               axis: "xy"
             },
@@ -530,12 +535,13 @@
         charts[id].data.datasets[0].pointBackgroundColor = pointBackgroundColors;
         charts[id].data.datasets[0].pointBorderColor = pointBackgroundColors;
         charts[id].data.datasets[0].pointRadius = pointRadius;
-        charts[id].data.datasets[0].pointHoverRadius = pointRadius.map(r => r + 1);
-        charts[id].data.datasets[0].pointHitRadius = 12;
-        charts[id].data.datasets[0].hitRadius = 12;
+        charts[id].data.datasets[0].pointHoverRadius = pointHoverRadius;
+        charts[id].data.datasets[0].pointHitRadius = pointHitRadius;
+        charts[id].data.datasets[0].hitRadius = pointHitRadius;
         charts[id].data.datasets[0].showLine = !is24h;
         charts[id].data.datasets[0].borderWidth = is24h ? 0 : 2;
         charts[id].options.scales.x = xScale;
+        charts[id].options.interaction.mode = is24h ? "point" : "nearest";
         charts[id].options.plugins.tooltip = tooltipOptions;
         charts[id].update("none");
       }
