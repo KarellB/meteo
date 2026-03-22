@@ -823,7 +823,7 @@
           <div class="media-summary-icon">🛰️</div>
           <div class="media-summary-text">
             <div class="media-summary-title">Aktuální satelitní snímek 24h-M</div>
-            <div class="media-summary-subtitle">Na mobilu je sekce ve výchozím stavu sbalená, na větších displejích otevřená. Vložený obraz se zmenšuje tak, aby lépe seděl do rámu.</div>
+            <div class="media-summary-subtitle">Na mobilu je sekce ve výchozím stavu sbalená, na větších displejích otevřená. Satelit je načítán z vieweru ČHMÚ s aktivní vrstvou hranic ČR a automaticky se zmenšuje do rámu.</div>
           </div>
         </div>
         <div class="media-summary-arrow">⌄</div>
@@ -838,18 +838,21 @@
             </div>
           </div>
           <div class="satellite-frame-wrap">
-            <div class="image-stage">
-              <img
-                id="satelliteImage"
-                class="media-image is-loading"
-                loading="lazy"
-                referrerpolicy="no-referrer"
-                alt="Aktuální satelitní snímek 24h-M z ČHMÚ">
-              <div class="media-overlay-label" id="satelliteStatus">Načítám satelitní snímek…</div>
+            <div class="embed-stage">
+              <div class="embed-scaler" id="satelliteScaler">
+                <iframe
+                  id="satelliteFrame"
+                  class="satellite-frame"
+                  loading="lazy"
+                  referrerpolicy="no-referrer"
+                  title="Aktuální satelitní snímek 24h-M s hranicemi ČR z ČHMÚ"
+                  allowfullscreen></iframe>
+              </div>
+              <div class="media-overlay-label" id="satelliteStatus">Načítám satelitní snímek s hranicemi ČR…</div>
             </div>
           </div>
           <div class="satellite-note">
-            Zobrazený panel se automaticky obnovuje každých 15 minut. Kdyby se v některém prohlížeči nevykreslil správně, otevřete přímo
+            Zobrazený panel s hranicemi ČR se automaticky obnovuje každých 15 minut. Kdyby se v některém prohlížeči nevykreslil správně, otevřete přímo
             <a href="https://www.chmi.cz/namerena-data/geostacionarni-druzice/24h-m" target="_blank" rel="noopener noreferrer">stránku produktu 24h-M</a>.
           </div>
         </div>
@@ -1186,7 +1189,8 @@
     }
 
 
-    const SATELLITE_IMAGE_BASE = "https://intranet.chmi.cz/files/portal/docs/meteo/sat/msg_hrit/img-msgcz-1160x800-24M/";
+
+    const SATELLITE_VIEWER_URL = "https://intranet.chmi.cz/files/portal/docs/meteo/sat/data_jsmsgview.html?add=5&lat=50.008&lon=14.447&nselect=17&ovr1=0&ovr1_ce=0&ovr1_eu=0&ovr2=0&ovr2_ce=0&ovr2_eu=0&prod=24M&refer=msgcz-1160x800&rep=1&und1=2&und1_ce=1&und1_eu=1&update=1";
     const RADAR_IMAGE_BASE = "https://intranet.chmi.cz/files/portal/docs/meteo/rad/data_tr_png_1km/";
 
     function applyMobileDisclosureState() {
@@ -1211,77 +1215,18 @@
       return `${y}${m}${d}.${hh}${mm}`;
     }
 
-    function buildSatelliteImageUrl(date, cacheBust) {
-      return `${SATELLITE_IMAGE_BASE}msgcz-1160x800.24M.${formatChmiStamp(date)}.0.jpg?v=${cacheBust}`;
+    function refreshSatelliteFrame() {
+      const frame = document.getElementById("satelliteFrame");
+      const updated = document.getElementById("satelliteUpdated");
+      const status = document.getElementById("satelliteStatus");
+      if (!frame || !updated || !status) return;
+
+      const stamp = Date.now();
+      updated.textContent = `Obnoveno: ${new Date().toLocaleDateString("cs-CZ")} ${new Date().toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}`;
+      status.textContent = "Vrstva hranic ČR je zapnutá";
+      frame.src = `${SATELLITE_VIEWER_URL}&_=${stamp}`;
     }
 
-    function buildRadarImageUrl(date, cacheBust) {
-      return `${RADAR_IMAGE_BASE}pacz23.z_max3d.${formatChmiStamp(date)}.0.png?v=${cacheBust}`;
-    }
-
-    function getCandidateTimes({ delayMinutes = 30, stepMinutes = 15, attempts = 16 } = {}) {
-      const start = floorToQuarterHour(new Date(Date.now() - delayMinutes * 60 * 1000));
-      return Array.from({ length: attempts }, (_, index) => {
-        const dt = new Date(start);
-        dt.setMinutes(dt.getMinutes() - index * stepMinutes);
-        return dt;
-      });
-    }
-
-    function formatImageTimestamp(date) {
-      return date.toLocaleDateString("cs-CZ") + " " + date.toLocaleTimeString("cs-CZ", {
-        hour: "2-digit",
-        minute: "2-digit"
-      });
-    }
-
-    function loadChmiImage({ imageId, updatedId, statusId, buildUrl, candidates, emptyMessage }) {
-      const img = document.getElementById(imageId);
-      const updated = document.getElementById(updatedId);
-      const status = document.getElementById(statusId);
-      if (!img || !updated || !status) return;
-
-      const times = candidates.slice();
-      const cacheBust = Date.now();
-
-      updated.textContent = "Obnovuji…";
-      status.textContent = "Hledám poslední dostupný snímek…";
-      img.classList.add("is-loading");
-
-      const tryNext = () => {
-        const candidate = times.shift();
-        if (!candidate) {
-          updated.textContent = emptyMessage;
-          status.textContent = "Zdroj dočasně nedostupný";
-          img.classList.remove("is-loading");
-          return;
-        }
-
-        const url = buildUrl(candidate, cacheBust);
-        img.onload = () => {
-          updated.textContent = `Snímek: ${formatImageTimestamp(candidate)}`;
-          status.textContent = "Automatická obnova aktivní";
-          img.classList.remove("is-loading");
-        };
-        img.onerror = () => {
-          tryNext();
-        };
-        img.src = url;
-      };
-
-      tryNext();
-    }
-
-    function refreshSatelliteImage() {
-      loadChmiImage({
-        imageId: "satelliteImage",
-        updatedId: "satelliteUpdated",
-        statusId: "satelliteStatus",
-        buildUrl: buildSatelliteImageUrl,
-        candidates: getCandidateTimes({ delayMinutes: 30, stepMinutes: 15, attempts: 20 }),
-        emptyMessage: "Satelitní snímek se nepodařilo načíst"
-      });
-    }
 
     function refreshRadarImage() {
       loadChmiImage({
@@ -1627,11 +1572,11 @@
 
     updateCharts();
     loadForecast();
-    refreshSatelliteImage();
+    refreshSatelliteFrame();
     refreshRadarImage();
     setInterval(updateCharts, 300000);
     setInterval(loadForecast, 1800000);
-    setInterval(refreshSatelliteImage, 900000);
+    setInterval(refreshSatelliteFrame, 900000);
     setInterval(refreshRadarImage, 600000);
   </script>
 </body>
