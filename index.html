@@ -184,7 +184,7 @@
       if (currentRange === "24h") {
         title.textContent = "Meteostanice Papago Jilemnice – posledních 24 hodin";
       } else if (currentRange === "week") {
-        title.textContent = "Meteostanice Papago Jilemnice – posledních 7 dní";
+        title.textContent = "Meteostanice Papago Jilemnice – poslední týden";
       } else if (currentRange === "month") {
         title.textContent = "Meteostanice Papago Jilemnice – posledních 30 dní";
       } else if (currentRange === "year") {
@@ -195,7 +195,6 @@
     async function loadHistory() {
       const response = await fetch("history.csv?v=" + Date.now());
       const text = await response.text();
-
       const rows = text.split(/\r?\n/);
 
       const data = rows.map(row => {
@@ -207,7 +206,6 @@
 
         const dateParts = cols[0].split(".");
         const timeParts = cols[1].split(":");
-
         if (dateParts.length !== 3 || timeParts.length < 2) return null;
 
         let year = parseInt(dateParts[2], 10);
@@ -329,34 +327,6 @@
       }
     };
 
-    const dayNightIconsPlugin = {
-      id: "dayNightIcons",
-      afterDraw(chart, args, pluginOptions) {
-        const ctx = chart.ctx;
-        const meta = chart.getDatasetMeta(0);
-        const timestamps = pluginOptions?.timestamps || [];
-
-        if (!meta?.data?.length || !timestamps.length || currentRange !== "24h") return;
-
-        ctx.save();
-        ctx.font = "12px Arial";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "top";
-        ctx.fillStyle = "#cbd5e1";
-
-        meta.data.forEach((point, i) => {
-          const dt = new Date(timestamps[i]);
-          if (isNaN(dt.getTime())) return;
-          if (dt.getHours() % 4 !== 0) return;
-
-          const icon = (dt.getHours() >= 6 && dt.getHours() < 18) ? "🌞" : "🌙";
-          ctx.fillText(icon, point.x, chart.chartArea.bottom + 28);
-        });
-
-        ctx.restore();
-      }
-    };
-
     function getXAxisTickLimit() {
       if (currentRange === "24h") return 8;
       if (currentRange === "week") return 10;
@@ -397,7 +367,6 @@
       const canvas = document.getElementById(id);
       const labels = getLabels(data);
       const values = data.map(d => d[key]);
-      const timestamps = data.map(d => d.datetime.toISOString());
 
       const pointBackgroundColors = values.map((v, i) => {
         if (isTemp && (v < 5 || v > 30)) return "red";
@@ -425,6 +394,7 @@
           pointBorderColor: pointBackgroundColors,
           pointRadius,
           pointHoverRadius: pointRadius.map(r => r + 1),
+          pointHitRadius: 8,
           borderWidth: 2
         };
 
@@ -439,7 +409,7 @@
             maintainAspectRatio: false,
             layout: {
               padding: {
-                bottom: currentRange === "24h" ? 36 : 8
+                bottom: 8
               }
             },
             scales: {
@@ -477,9 +447,6 @@
                   }
                 }
               },
-              dayNightIcons: {
-                timestamps
-              },
               zoom: {
                 pan: {
                   enabled: true,
@@ -507,9 +474,6 @@
         charts[id].data.datasets[0].pointBorderColor = pointBackgroundColors;
         charts[id].data.datasets[0].pointRadius = pointRadius;
         charts[id].data.datasets[0].pointHoverRadius = pointRadius.map(r => r + 1);
-        charts[id].options.layout.padding.bottom = currentRange === "24h" ? 36 : 8;
-        charts[id].options.scales.x.ticks.maxTicksLimit = getXAxisTickLimit();
-        charts[id].options.plugins.dayNightIcons = { timestamps };
         charts[id].update();
       }
     }
@@ -546,7 +510,7 @@
         "temp",
         "blue",
         true,
-        [tempIconPlugin, dayNightIconsPlugin]
+        [tempIconPlugin]
       );
 
       createOrUpdateChart(
@@ -556,7 +520,7 @@
         "hum",
         "green",
         false,
-        [dayNightIconsPlugin]
+        []
       );
 
       createOrUpdateChart(
@@ -566,7 +530,7 @@
         "press",
         "yellow",
         false,
-        [dayNightIconsPlugin]
+        []
       );
 
       createOrUpdateChart(
@@ -576,7 +540,7 @@
         "wind",
         "red",
         false,
-        [dayNightIconsPlugin]
+        []
       );
 
       const last = data[data.length - 1];
@@ -620,10 +584,8 @@
         }
 
         const last = historyData[historyData.length - 1];
-
         document.getElementById("lastUpdate").textContent =
           "Poslední aktualizace: " + new Date().toLocaleTimeString("cs-CZ");
-
         document.getElementById("weatherIcon").textContent = getWeatherIcon(last.temp);
 
         updateBodyBackground();
