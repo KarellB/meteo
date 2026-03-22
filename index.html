@@ -374,33 +374,17 @@
       border: 1px solid rgba(255,255,255,0.10);
       background: #0b1220;
       aspect-ratio: 16 / 10;
-      min-height: 420px;
+      min-height: 320px;
       max-height: 560px;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
     }
 
-    .embed-stage {
-      position: absolute;
-      inset: 0;
-      overflow: hidden;
-      background: #0b1220;
-    }
-
-    .embed-scaler {
-      position: absolute;
-      top: 0;
-      left: 0;
+    .media-image {
       width: 100%;
       height: 100%;
-      transform-origin: top left;
-      transition: transform 0.2s ease;
-    }
-
-    .radar-frame {
-      width: 100%;
-      height: 100%;
-      border: 0;
       display: block;
+      object-fit: contain;
+      object-position: center;
       background: #0b1220;
     }
 
@@ -470,23 +454,9 @@
       border: 1px solid rgba(255,255,255,0.10);
       background: #0b1220;
       aspect-ratio: 16 / 10;
-      min-height: 420px;
+      min-height: 320px;
       max-height: 560px;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
-    }
-
-    .satellite-frame {
-      width: 100%;
-      height: 100%;
-      border: 0;
-      display: block;
-      background: #0b1220;
-    }
-
-    .satellite-frame,
-    .radar-frame {
-      min-width: 100%;
-      min-height: 100%;
     }
 
     .satellite-note {
@@ -565,15 +535,9 @@
       .radar-frame-wrap,
       .satellite-frame-wrap {
         aspect-ratio: 4 / 5;
-        min-height: 300px;
+        min-height: 260px;
         max-height: 460px;
         border-radius: 16px;
-      }
-
-      .embed-scaler {
-        width: 118%;
-        height: 118%;
-        transform: scale(0.8474576271);
       }
     }
 
@@ -664,14 +628,8 @@
       .radar-frame-wrap,
       .satellite-frame-wrap {
         aspect-ratio: 10 / 13;
-        min-height: 280px;
+        min-height: 220px;
         max-height: 380px;
-      }
-
-      .embed-scaler {
-        width: 136%;
-        height: 136%;
-        transform: scale(0.7352941176);
       }
 
       .radar-note,
@@ -749,7 +707,7 @@
           <div class="media-summary-icon">🛰️</div>
           <div class="media-summary-text">
             <div class="media-summary-title">Aktuální satelitní snímek 24h-M</div>
-            <div class="media-summary-subtitle">Na mobilu je sekce ve výchozím stavu sbalená, na větších displejích otevřená. Vložený obraz se zmenšuje tak, aby lépe seděl do rámu.</div>
+            <div class="media-summary-subtitle">Na mobilu je sekce ve výchozím stavu sbalená, na větších displejích otevřená. Snímek se načítá jako samotný obrázek, takže se lépe přizpůsobí šířce karty.</div>
           </div>
         </div>
         <div class="media-summary-arrow">⌄</div>
@@ -764,20 +722,15 @@
             </div>
           </div>
           <div class="satellite-frame-wrap">
-            <div class="embed-stage">
-              <div class="embed-scaler">
-                <iframe
-                  id="satelliteFrame"
-                  class="satellite-frame"
-                  loading="lazy"
-                  referrerpolicy="no-referrer"
-                  src="https://intranet.chmi.cz/files/portal/docs/meteo/sat/data_jsmsgview.html">
-                </iframe>
-              </div>
-            </div>
+            <img
+              id="satelliteImage"
+              class="media-image"
+              loading="lazy"
+              alt="Aktuální satelitní snímek 24h-M z ČHMÚ"
+              referrerpolicy="no-referrer">
           </div>
           <div class="satellite-note">
-            Zobrazený panel se automaticky obnovuje každých 15 minut. Kdyby se v některém prohlížeči nevykreslil správně, otevřete přímo
+            Satelitní vrstva se teď načítá jako samotný obrázek 24h-M, takže je na mobilu výrazně responzivnější. Obnovuje se každých 15 minut. Kdyby se snímek nepodařilo načíst, otevřete přímo
             <a href="https://www.chmi.cz/namerena-data/geostacionarni-druzice/24h-m" target="_blank" rel="noopener noreferrer">stránku produktu 24h-M</a>.
           </div>
         </div>
@@ -795,20 +748,15 @@
         </div>
       </div>
       <div class="radar-frame-wrap">
-        <div class="embed-stage">
-          <div class="embed-scaler">
-            <iframe
-              id="radarFrame"
-              class="radar-frame"
-              loading="lazy"
-              referrerpolicy="no-referrer"
-              src="https://intranet.chmi.cz/files/portal/docs/meteo/rad/inca-cz/short.html">
-            </iframe>
-          </div>
-        </div>
+        <img
+          id="radarImage"
+          class="media-image"
+          loading="lazy"
+          alt="Aktuální radarová data srážek z ČHMÚ"
+          referrerpolicy="no-referrer">
       </div>
       <div class="radar-note">
-        Radarová vrstva se automaticky obnovuje každých 10 minut. Pokud se nevykreslí správně, otevřete přímo
+        Radarová vrstva se teď načítá jako samotný obrázek, takže lépe sedí do rámu na telefonu i desktopu. Obnovuje se každých 10 minut. Pokud se nevykreslí správně, otevřete přímo
         <a href="https://www.chmi.cz/namerena-data/radar-nowcast/srazky-a-blesky" target="_blank" rel="noopener noreferrer">stránku radarových a bleskových měření</a>.
       </div>
     </div>
@@ -1116,8 +1064,8 @@
     }
 
 
-    const SATELLITE_VIEWER_URL = "https://intranet.chmi.cz/files/portal/docs/meteo/sat/data_jsmsgview.html";
-    const RADAR_VIEWER_URL = "https://intranet.chmi.cz/files/portal/docs/meteo/rad/inca-cz/short.html";
+    const SATELLITE_IMAGE_BASE_URL = "https://intranet.chmi.cz/files/portal/docs/meteo/sat/msg_hrit/img-msgcz-1160x800-24M/";
+    const RADAR_IMAGE_BASE_URL = "https://www.chmi.cz/files/portal/docs/meteo/rad/inca-cz/data/czrad-z_max3d/";
 
     function applyMobileDisclosureState() {
       const details = document.getElementById("satelliteDisclosure");
@@ -1125,21 +1073,64 @@
       details.open = window.innerWidth > 560;
     }
 
-    function refreshEmbeddedFrame(frameId, labelId, baseUrl, prefix) {
-      const frame = document.getElementById(frameId);
+    function getUtcSlotDate(stepMinutes, backSteps = 0, settleMinutes = 0) {
+      const dt = new Date(Date.now() - settleMinutes * 60000 - backSteps * stepMinutes * 60000);
+      dt.setUTCSeconds(0, 0);
+      const minutes = dt.getUTCMinutes();
+      dt.setUTCMinutes(minutes - (minutes % stepMinutes));
+      return dt;
+    }
+
+    function formatUtcPart(value) {
+      return String(value).padStart(2, "0");
+    }
+
+    function buildSatelliteImageUrl(backSteps = 0) {
+      const dt = getUtcSlotDate(15, backSteps, 20);
+      const stamp = `${dt.getUTCFullYear()}${formatUtcPart(dt.getUTCMonth() + 1)}${formatUtcPart(dt.getUTCDate())}.${formatUtcPart(dt.getUTCHours())}${formatUtcPart(dt.getUTCMinutes())}`;
+      return `${SATELLITE_IMAGE_BASE_URL}msgcz-1160x800.24M.${stamp}.0.jpg?v=${Date.now()}`;
+    }
+
+    function buildRadarImageUrl(backSteps = 0) {
+      const dt = getUtcSlotDate(5, backSteps, 10);
+      const stamp = `${dt.getUTCFullYear()}${formatUtcPart(dt.getUTCMonth() + 1)}${formatUtcPart(dt.getUTCDate())}.${formatUtcPart(dt.getUTCHours())}${formatUtcPart(dt.getUTCMinutes())}`;
+      return `${RADAR_IMAGE_BASE_URL}pacz2gmaps3.z_max3d.${stamp}.0.png?v=${Date.now()}`;
+    }
+
+    function loadLatestImage(imageId, labelId, builder, prefix, maxFallbacks) {
+      const img = document.getElementById(imageId);
       const updated = document.getElementById(labelId);
-      if (!frame || !updated) return;
+      if (!img || !updated) return;
 
-      frame.src = `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}v=${Date.now()}`;
-      updated.textContent = `${prefix}: ${new Date().toLocaleTimeString("cs-CZ")}`;
+      let attempt = 0;
+      updated.textContent = `${prefix}: načítám…`;
+
+      const tryLoad = () => {
+        if (attempt > maxFallbacks) {
+          updated.textContent = `${prefix}: snímek se nepodařilo načíst`;
+          return;
+        }
+
+        const src = builder(attempt);
+        img.onload = () => {
+          updated.textContent = `${prefix}: ${new Date().toLocaleTimeString("cs-CZ")}`;
+        };
+        img.onerror = () => {
+          attempt += 1;
+          tryLoad();
+        };
+        img.src = src;
+      };
+
+      tryLoad();
     }
 
-    function refreshSatelliteFrame() {
-      refreshEmbeddedFrame("satelliteFrame", "satelliteUpdated", SATELLITE_VIEWER_URL, "Obnoveno");
+    function refreshSatelliteImage() {
+      loadLatestImage("satelliteImage", "satelliteUpdated", buildSatelliteImageUrl, "Obnoveno", 10);
     }
 
-    function refreshRadarFrame() {
-      refreshEmbeddedFrame("radarFrame", "radarUpdated", RADAR_VIEWER_URL, "Obnoveno");
+    function refreshRadarImage() {
+      loadLatestImage("radarImage", "radarUpdated", buildRadarImageUrl, "Obnoveno", 18);
     }
 
 
@@ -1473,12 +1464,17 @@
       }
     }
 
+    applyMobileDisclosureState();
+    window.addEventListener("resize", applyMobileDisclosureState);
+
     updateCharts();
     loadForecast();
-    refreshSatelliteFrame();
+    refreshSatelliteImage();
+    refreshRadarImage();
     setInterval(updateCharts, 300000);
     setInterval(loadForecast, 1800000);
-    setInterval(refreshSatelliteFrame, 900000);
+    setInterval(refreshSatelliteImage, 900000);
+    setInterval(refreshRadarImage, 600000);
   </script>
 </body>
 </html>
