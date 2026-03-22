@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Meteostanice Papago Jilemnice</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
   <style>
     body {
@@ -317,7 +318,10 @@
 
         if (!lastPoint) return;
 
-        const value = dataset.data[dataset.data.length - 1];
+        const value = currentRange === "24h"
+          ? dataset.data[dataset.data.length - 1].y
+          : dataset.data[dataset.data.length - 1];
+
         const icon = value < 0 ? "❄️" : (value > 30 ? "🔥" : "🌡️");
 
         ctx.save();
@@ -328,20 +332,13 @@
     };
 
     function getXAxisTickLimit() {
-      if (currentRange === "24h") return 8;
+      if (currentRange === "24h") return 12;
       if (currentRange === "week") return 10;
       if (currentRange === "month") return 12;
       return 12;
     }
 
     function getLabels(data) {
-      if (currentRange === "24h") {
-        return data.map(d => d.datetime.toLocaleTimeString("cs-CZ", {
-          hour: "2-digit",
-          minute: "2-digit"
-        }));
-      }
-
       if (currentRange === "week") {
         return data.map(d => d.datetime.toLocaleString("cs-CZ", {
           day: "2-digit",
@@ -365,44 +362,83 @@
 
     function createOrUpdateChart(id, label, data, key, color, isTemp = false, plugins = []) {
       const canvas = document.getElementById(id);
+
+      const scatterValues = data.map(d => ({ x: d.datetime, y: d[key] }));
       const labels = getLabels(data);
       const values = data.map(d => d[key]);
 
-      const pointBackgroundColors = values.map((v, i) => {
+      const pointBackgroundColors = data.map((d, i) => {
+        const v = d[key];
         if (isTemp && (v < 5 || v > 30)) return "red";
-        return i === values.length - 1 ? "white" : color;
+        return i === data.length - 1 ? "white" : color;
       });
 
-      const pointRadius = values.map((v, i) => i === values.length - 1 ? 6 : 4);
+      const pointRadius = data.map((d, i) => i === data.length - 1 ? 6 : 4);
 
       let borderColor = color;
-      if (isTemp) {
+      if (isTemp && currentRange !== "24h") {
         const grad = canvas.getContext("2d").createLinearGradient(0, 0, 0, 300);
         grad.addColorStop(0, "#00f");
         grad.addColorStop(1, "#7ec0ff");
         borderColor = grad;
       }
 
-      if (!charts[id]) {
-        const dataset = {
-          label,
-          data: values,
-          fill: false,
-          tension: 0,
-          showLine: currentRange !== "24h",
-          borderColor,
-          pointBackgroundColor: pointBackgroundColors,
-          pointBorderColor: pointBackgroundColors,
-          pointRadius,
-          pointHoverRadius: pointRadius.map(r => r + 1),
-          pointHitRadius: 8,
-          borderWidth: currentRange === "24h" ? 0 : 2
-        };
+      const is24h = currentRange === "24h";
+
+      const dataset = {
+        label,
+        data: is24h ? scatterValues : values,
+        fill: false,
+        tension: 0,
+        showLine: !is24h,
+        borderColor: is24h ? color : borderColor,
+        pointBackgroundColor: pointBackgroundColors,
+        pointBorderColor: pointBackgroundColors,
+        pointRadius,
+        pointHoverRadius: pointRadius.map(r => r + 1),
+        pointHitRadius: 8,
+        borderWidth: is24h ? 0 : 2
+      };
+
+      const chartType = is24h ? "scatter" : "line";
+
+      const xScale = is24h
+        ? {
+            type: "time",
+            time: {
+              unit: "hour",
+              displayFormats: {
+                hour: "HH:mm"
+              }
+            },
+            ticks: {
+              color: "white"
+            },
+            grid: {
+              color: "#374151"
+            }
+          }
+        : {
+            ticks: {
+              color: "white",
+              maxRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: getXAxisTickLimit()
+            },
+            grid: {
+              color: "#374151"
+            }
+          };
+
+      if (!charts[id] || charts[id].config.type !== chartType) {
+        if (charts[id]) {
+          charts[id].destroy();
+        }
 
         charts[id] = new Chart(canvas, {
-          type: "line",
+          type: chartType,
           data: {
-            labels,
+            labels: is24h ? [] : labels,
             datasets: [dataset]
           },
           options: {
@@ -414,17 +450,7 @@
               }
             },
             scales: {
-              x: {
-                ticks: {
-                  color: "white",
-                  maxRotation: 0,
-                  autoSkip: true,
-                  maxTicksLimit: getXAxisTickLimit()
-                },
-                grid: {
-                  color: "#374151"
-                }
-              },
+              x: xScale,
               y: {
                 ticks: {
                   color: "white"
@@ -443,8 +469,10 @@
               tooltip: {
                 callbacks: {
                   label: function(context) {
-                    const dt = data[context.dataIndex].datetime;
-                    return `${label}: ${context.formattedValue} (${dt.toLocaleDateString("cs-CZ")} ${dt.toLocaleTimeString("cs-CZ")})`;
+                    const idx = context.dataIndex;
+                    const dt = data[idx].datetime;
+                    const val = is24h ? context.raw.y : context.formattedValue;
+                    return `${label}: ${val} (${dt.toLocaleDateString("cs-CZ")} ${dt.toLocaleTimeString("cs-CZ")})`;
                   }
                 }
               },
@@ -468,15 +496,16 @@
           plugins
         });
       } else {
-        charts[id].data.labels = labels;
-        charts[id].data.datasets[0].data = values;
-        charts[id].data.datasets[0].borderColor = borderColor;
+        charts[id].data.labels = is24h ? [] : labels;
+        charts[id].data.datasets[0].data = is24h ? scatterValues : values;
+        charts[id].data.datasets[0].borderColor = is24h ? color : borderColor;
         charts[id].data.datasets[0].pointBackgroundColor = pointBackgroundColors;
         charts[id].data.datasets[0].pointBorderColor = pointBackgroundColors;
         charts[id].data.datasets[0].pointRadius = pointRadius;
         charts[id].data.datasets[0].pointHoverRadius = pointRadius.map(r => r + 1);
-        charts[id].data.datasets[0].showLine = currentRange !== "24h";
-        charts[id].data.datasets[0].borderWidth = currentRange === "24h" ? 0 : 2;
+        charts[id].data.datasets[0].showLine = !is24h;
+        charts[id].data.datasets[0].borderWidth = is24h ? 0 : 2;
+        charts[id].options.scales.x = xScale;
         charts[id].update();
       }
     }
